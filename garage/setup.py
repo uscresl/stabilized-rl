@@ -18,7 +18,6 @@ REQUIRED = [
     'numpy>=1.14.5',
     'psutil',
     'python-dateutil',
-    'ray',
     'scikit-image',
     'scipy',
     'setproctitle>=1.0',
@@ -41,6 +40,8 @@ EXTRAS['tensorflow'] = [
     # users can choose to install tensorflow or tensorflow-gpu.
     'tensorflow-probability>=0.11.0,<=0.12.2',
 ]
+
+EXTRAS['ray'] = ['ray']
 
 EXTRAS['gym'] = [
     f'gym[atari,box2d,classic_control]=={GYM_VERSION}',

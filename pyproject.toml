@@ -28,6 +28,7 @@ toml = "^0.10.2"
 dask-jobqueue = "^0.7.3"
 numpy = ">1.22"
 tensorboard = "^2.6.0"
+ray = "^2.0.0"
 
 [build-system]
 requires = ["poetry>=0.12"]
