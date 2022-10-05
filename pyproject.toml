@@ -28,6 +28,8 @@ numpy = ">1.22"
 tensorboard = "^2.6.0"
 ray = "^2.0.0"
 mujoco-py = "^2.1.2"
+scikit-learn = "^1.1.2"
+tqdm = "^4.64.1"
 
 [build-system]
 requires = ["poetry>=0.12"]

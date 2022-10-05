@@ -16,9 +16,12 @@ class FakeAlgo:
     def _featurize(self, hparams):
         return np.concatenate([hparams, hparams**2, hparams**3], axis=0)
 
-    def step(self, hparams):
+    def true_mean(self, hparams):
         featurized = self._featurize(hparams)
-        perf_improvement = np.dot(self._hparam_dep, featurized) + np.random.normal(
+        return np.dot(self._hparam_dep, featurized)
+
+    def step(self, hparams):
+        perf_improvement = self.true_mean(hparams) + np.random.normal(
             self._improvement_noise
         )
         self.perf_now += perf_improvement

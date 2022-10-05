@@ -5,14 +5,17 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, Matern
 import clize
 from matplotlib import pyplot as plt
+from tqdm import tqdm
 
 
 output = CsvOutput("gp_fit.csv")
 logger.add_output(output)
 
 
-def experiment(epochs=20, num_hparams_sampled=50, delta=0.5, seed=100):
-    kernel = RBF(length_scale=5e-2, length_scale_bounds="fixed")
+def experiment(epochs=100, num_hparams_sampled=50, delta=0.5, seed=100):
+    #kernel = RBF(length_scale=.25, length_scale_bounds="fixed")
+    # kernel = RBF(length_scale=.5, length_scale_bounds="fixed")
+    kernel = Matern(length_scale=0.25, nu=1.5, length_scale_bounds="fixed")
     np.random.seed = seed
     gp = GaussianProcessRegressor(kernel=kernel, random_state=seed)
     hparam_dims = 1
@@ -25,7 +28,7 @@ def experiment(epochs=20, num_hparams_sampled=50, delta=0.5, seed=100):
     sampled_x = [init_hparam]
     sampled_y = [init_perf]
 
-    for step in range(1, epochs + 1):
+    for step in tqdm(range(1, epochs + 1)):
         sampled_hparams = np.random.sample(size=(num_hparams_sampled, hparam_dims))
         pred_mu, pred_std = gp.predict(sampled_hparams, return_std=True)
         nu = 1
@@ -51,15 +54,19 @@ def experiment(epochs=20, num_hparams_sampled=50, delta=0.5, seed=100):
         sampled_y.append(perf_improv)
 
         gp.fit(sampled_x, sampled_y)
-    plot_gpr(gp, sampled_x, sampled_y)
+        plot_gpr(gp, sampled_x, sampled_y, step, algo)
 
 
-def plot_gpr(gp, X_train, Y_train):
+def plot_gpr(gp, X_train, Y_train, step, algo):
     X_bel = np.linspace(np.min(X_train), np.max(X_train), num=1_000).reshape(-1, 1)
     mean_bel, std_bel = gp.predict(X_bel, return_std=True)
 
+    plt.clf()
+    plt.ylim((-10, 10))
+    plt.xlim((0, 1))
     plt.scatter(X_train, Y_train, label="Observations")
     plt.plot(X_bel, mean_bel, label="Mean prediction")
+    plt.plot(X_bel, [algo.true_mean(x) for x in X_bel], label="True mean")
     plt.fill_between(
         X_bel.ravel(),
         mean_bel - 1.96 * std_bel,
@@ -70,7 +77,7 @@ def plot_gpr(gp, X_train, Y_train):
     plt.legend()
     plt.xlabel("$hparam$")
     plt.ylabel("Perf. Improvement")
-    plt.savefig("gpr.png")
+    plt.savefig(f"gpr{step:03}.png")
 
 
 clize.run(experiment)
