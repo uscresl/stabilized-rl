@@ -2,7 +2,7 @@ import numpy as np
 from dowel import logger, tabular, CsvOutput
 from fake_algo import FakeAlgo
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, Matern
+from sklearn.gaussian_process.kernels import RBF, Matern, WhiteKernel, ConstantKernel
 import clize
 from matplotlib import pyplot as plt
 from tqdm import tqdm
@@ -15,7 +15,10 @@ logger.add_output(output)
 def experiment(epochs=100, num_hparams_sampled=50, delta=0.5, seed=100):
     #kernel = RBF(length_scale=.25, length_scale_bounds="fixed")
     # kernel = RBF(length_scale=.5, length_scale_bounds="fixed")
-    kernel = Matern(length_scale=0.25, nu=1.5, length_scale_bounds="fixed")
+    kernel = (Matern(length_scale=0.1, nu=0.5, length_scale_bounds="fixed") +
+              ConstantKernel() +
+              (Matern(length_scale=0.1, nu=0.5, length_scale_bounds="fixed")
+                * WhiteKernel()))
     np.random.seed = seed
     gp = GaussianProcessRegressor(kernel=kernel, random_state=seed)
     hparam_dims = 1
@@ -31,7 +34,8 @@ def experiment(epochs=100, num_hparams_sampled=50, delta=0.5, seed=100):
     for step in tqdm(range(1, epochs + 1)):
         sampled_hparams = np.random.sample(size=(num_hparams_sampled, hparam_dims))
         pred_mu, pred_std = gp.predict(sampled_hparams, return_std=True)
-        nu = 1
+        # nu = 1
+        nu = 2
         tau_t = 2 * np.log(
             step ** (hparam_dims / 2 + 2) * np.pi**2 / (3 * delta)
         )  # 2*log(t^(d/2+2)π^2/(3δ))
@@ -58,7 +62,8 @@ def experiment(epochs=100, num_hparams_sampled=50, delta=0.5, seed=100):
 
 
 def plot_gpr(gp, X_train, Y_train, step, algo):
-    X_bel = np.linspace(np.min(X_train), np.max(X_train), num=1_000).reshape(-1, 1)
+    #X_bel = np.linspace(np.min(X_train), np.max(X_train), num=1_000).reshape(-1, 1)
+    X_bel = np.linspace(0, 1, num=1_000).reshape(-1, 1)
     mean_bel, std_bel = gp.predict(X_bel, return_std=True)
 
     plt.clf()
