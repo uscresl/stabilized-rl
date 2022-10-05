@@ -213,6 +213,18 @@ class VPG(RLAlgorithm):
                 tabular.record('/dLoss',
                                vf_loss_before.item() - vf_loss_after.item())
 
+    def step(self, trainer, epoch):
+        for _ in range(self._steps_per_epoch):
+            samples = self._sampler.obtain_samples(
+                epoch, self.batch_size, self.policy)
+            trainer.record_samples(samples)
+            self._train_once(samples)
+        last_return = np.mean(
+            log_performance(epoch,
+                            trainer.step_path,
+                            discount=self._discount))
+        return {'AverageReturn': last_return}
+
     def train(self, trainer):
         """Obtain samplers and start actual training for each epoch.
 
@@ -222,23 +234,14 @@ class VPG(RLAlgorithm):
                 such as snapshotting and sampler control.
 
         Returns:
-            float: The average return in last epoch cycle.
+            dict[str, float]: Statistics
 
         """
-        last_return = None
+        last_statistics = {}
 
         for epoch in trainer.step_epochs():
-            for _ in range(self._steps_per_epoch):
-                trainer.step_path = self._sampler.obtain_samples(epoch,
-                                                                 self.batch_size,
-                                                                 self.policy)
-                trainer.total_env_steps = self._sampler.total_env_steps
-                self._train_once(trainer.step_path)
-            last_return = np.mean(
-                log_performance(epoch,
-                                trainer.step_path,
-                                discount=self._discount))
-        return last_return
+            last_statistics = self.step(trainer, epoch)
+        return last_statistics
 
     def _train_policy(self, observations, actions, rewards, returns,
                       advantages, lengths):

@@ -219,7 +219,7 @@ class Trainer:
             itr, (batch_size or self._train_args.batch_size),
             agent_update=agent_update,
             env_update=env_update)
-        self._stats.total_env_steps += sum(episodes.lengths)
+        self.record_samples(episodes)
         return episodes
 
     def obtain_samples(self,
@@ -253,6 +253,10 @@ class Trainer:
         """
         eps = self.obtain_episodes(itr, batch_size, agent_update, env_update)
         return eps.to_list()
+
+    def record_samples(self, timestep_batch):
+        self._stats.total_env_steps += len(timestep_batch.actions)
+        self.step_path = timestep_batch
 
     def save(self, epoch):
         """Save snapshot of current batch.
