@@ -12,7 +12,7 @@ python = ">=3.10, <3.11"
 metaworld = {path = "./metaworld", develop = true}
 ipdb = "^0.13.2"
 torch = "^1.12.1"
-garage = {path = "./garage", develop = true}
+garage = {path = "./garage", develop = true, extras = ["gym"]}
 clize = "^4.1.1"
 pytest = "^5.4.3"
 sympy = "^1.6.1"
@@ -23,12 +23,11 @@ seaborn = "^0.11.0"
 scipy = "^1.5.2"
 enum34 = "1.1.8"
 rpyc = "^5.0.1"
-network2tikz = "^0.1.8"
 toml = "^0.10.2"
-dask-jobqueue = "^0.7.3"
 numpy = ">1.22"
 tensorboard = "^2.6.0"
 ray = "^2.0.0"
+mujoco-py = "^2.1.2"
 
 [build-system]
 requires = ["poetry>=0.12"]
