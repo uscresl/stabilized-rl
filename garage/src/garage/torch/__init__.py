@@ -13,7 +13,8 @@ from garage.torch._functions import (as_tensor, as_torch_dict,
                                      product_of_gaussians, set_gpu_mode,
                                      soft_update_model, state_dict_to,
                                      torch_to_np, update_module_params,
-                                     list_to_tensor)
+                                     list_to_tensor, split_packed_tensor,
+                                     is_policy_recurrent, discount_cumsum)
 
 # yapf: enable
 __all__ = [
@@ -42,4 +43,7 @@ __all__ = [
     'state_dict_to',
     'torch_to_np',
     'update_module_params',
+    'split_packed_tensor',
+    'is_policy_recurrent',
+    'discount_cumsum',
 ]

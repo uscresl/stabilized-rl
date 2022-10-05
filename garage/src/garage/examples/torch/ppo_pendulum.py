@@ -50,10 +50,11 @@ def ppo_pendulum(ctxt=None, seed=1):
                value_function=value_function,
                sampler=sampler,
                discount=0.99,
-               center_adv=False)
+               center_adv=False,
+               batch_size=10000)
 
     trainer.setup(algo, env)
-    trainer.train(n_epochs=100, batch_size=10000)
+    trainer.train(n_epochs=100)
 
 
 ppo_pendulum(seed=1)

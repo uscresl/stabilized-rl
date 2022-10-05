@@ -107,19 +107,22 @@ def compute_advantages(discount, gae_lambda, max_episode_length, baselines,
 
 
 def discount_cumsum(x, discount):
-    discount_x = torch.full((len(x), ),
+    discount_x = torch.full((len(x),),
                             discount,
                             dtype=torch.float,
                             device=x.device)
-    # discount_x[0] = 1.0
-    filter = torch.cumprod(discount_x, dim=0)
-    returns = F.conv1d(x, filter, stride=1)
-    assert returns.shape == (len(x), )
-    from garage.np import discount_cumsum as np_discout_cumsum
-    import numpy as np
-    expected = np_discout_cumsum(torch_to_np(x), discount)
-    assert np.array_equal(expected, torch_to_np(returns))
-    return returns
+    discount_x[0] = 1.0
+    # Compute discount weights.
+    weights = torch.cumprod(discount_x, dim=0)
+    # Add batch, channel dimensions
+    weights = weights.reshape(1, 1, -1)
+    # Pad to zero on one side
+    x_batch = torch.cat([x.reshape(1, 1, -1),
+                         torch.zeros((1, 1, len(x) - 1), dtype=x.dtype)],
+                        axis=-1)
+    returns = F.conv1d(x_batch, weights, stride=1)
+    returns_flat = returns.flatten()[:len(x)]
+    return returns_flat
 
 
 def split_packed_tensor(t, lengths):
@@ -592,3 +595,25 @@ def expand_var(name, item, n_expected, reference):
                 f'{n_expected} to match {reference}')
     else:
         return [item] * n_expected
+
+
+def is_policy_recurrent(policy, env_spec):
+    """Check if a torch policy is recurrent.
+
+    Args:
+        policy (garage.torch.Policy): Policy that might be recurrent.
+
+    Returns:
+        bool: If policy is recurrent.
+
+    """
+    try:
+        policy.forward(
+            as_tensor([
+                env_spec.observation_space.sample(),
+                env_spec.observation_space.sample()
+            ]))
+    except ShuffledOptimizationNotSupported:
+        return True
+    else:
+        return False

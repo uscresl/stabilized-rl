@@ -146,25 +146,3 @@ def observation_batch_to_packed_sequence(observations):
         start = stop
     pack_sequence = nn.utils.rnn.pack_sequence
     return pack_sequence(sequence, enforce_sorted=False)
-
-
-def is_policy_recurrent(policy, env_spec):
-    """Check if a torch policy is recurrent.
-
-    Args:
-        policy (garage.torch.Policy): Policy that might be recurrent.
-
-    Returns:
-        bool: If policy is recurrent.
-
-    """
-    try:
-        policy.forward(
-            as_tensor([
-                env_spec.observation_space.sample(),
-                env_spec.observation_space.sample()
-            ]))
-    except ShuffledOptimizationNotSupported:
-        return True
-    else:
-        return False

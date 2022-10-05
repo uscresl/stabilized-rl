@@ -2,7 +2,8 @@
 import torch
 
 from garage.torch.algos import VPG
-from garage.torch.optimizers import MinibatchOptimizer
+from garage.torch.optimizers import (MinibatchOptimizer, EpisodeBatchOptimizer)
+from garage.torch import is_policy_recurrent
 
 
 class PPO(VPG):
@@ -20,7 +21,6 @@ class PPO(VPG):
             value function.
         lr_clip_range (float): The limit on the likelihood ratio between
             policies.
-        num_train_per_epoch (int): Number of train_once calls per epoch.
         discount (float): Discount.
         gae_lambda (float): Lambda used for generalized advantage
             estimation.
@@ -49,10 +49,10 @@ class PPO(VPG):
                  policy,
                  value_function,
                  sampler,
+                 batch_size,
                  policy_optimizer=None,
                  vf_optimizer=None,
                  lr_clip_range=2e-1,
-                 num_train_per_epoch=1,
                  discount=0.99,
                  gae_lambda=0.97,
                  center_adv=True,
@@ -60,28 +60,46 @@ class PPO(VPG):
                  policy_ent_coeff=0.0,
                  use_softplus_entropy=False,
                  stop_entropy_gradient=False,
-                 entropy_method='no_entropy'):
+                 entropy_method='no_entropy',
+                 recurrent=None):
+        if recurrent is None:
+            recurrent = is_policy_recurrent(policy, env_spec)
 
         if policy_optimizer is None:
-            policy_optimizer = MinibatchOptimizer(
-                (torch.optim.Adam, dict(lr=2.5e-4)),
-                policy,
-                max_optimization_epochs=10,
-                minibatch_size=64)
+            if recurrent:
+                policy_optimizer = EpisodeBatchOptimizer(
+                    (torch.optim.Adam, dict(lr=2.5e-4)),
+                    policy,
+                    max_optimization_epochs=10,
+                    minibatch_size=64)
+            else:
+                policy_optimizer = MinibatchOptimizer(
+                    (torch.optim.Adam, dict(lr=2.5e-4)),
+                    policy,
+                    max_optimization_epochs=10,
+                    minibatch_size=64)
+
         if vf_optimizer is None:
-            vf_optimizer = MinibatchOptimizer(
-                (torch.optim.Adam, dict(lr=2.5e-4)),
-                value_function,
-                max_optimization_epochs=10,
-                minibatch_size=64)
+            if recurrent:
+                vf_optimizer = EpisodeBatchOptimizer(
+                    (torch.optim.Adam, dict(lr=2.5e-4)),
+                    value_function,
+                    max_optimization_epochs=10,
+                    minibatch_size=64)
+            else:
+                vf_optimizer = MinibatchOptimizer(
+                    (torch.optim.Adam, dict(lr=2.5e-4)),
+                    value_function,
+                    max_optimization_epochs=10,
+                    minibatch_size=64)
 
         super().__init__(env_spec=env_spec,
                          policy=policy,
                          value_function=value_function,
                          sampler=sampler,
+                         batch_size=batch_size,
                          policy_optimizer=policy_optimizer,
                          vf_optimizer=vf_optimizer,
-                         num_train_per_epoch=num_train_per_epoch,
                          discount=discount,
                          gae_lambda=gae_lambda,
                          center_adv=center_adv,
@@ -89,7 +107,8 @@ class PPO(VPG):
                          policy_ent_coeff=policy_ent_coeff,
                          use_softplus_entropy=use_softplus_entropy,
                          stop_entropy_gradient=stop_entropy_gradient,
-                         entropy_method=entropy_method)
+                         entropy_method=entropy_method,
+                         recurrent=recurrent)
 
         self._lr_clip_range = lr_clip_range
 

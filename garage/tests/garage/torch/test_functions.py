@@ -15,7 +15,7 @@ from garage.np import discount_cumsum as np_discout_cumsum
 from garage.torch import (as_torch_dict, compute_advantages,
                           flatten_to_single_vector, global_device, pad_to_last,
                           product_of_gaussians, set_gpu_mode, state_dict_to,
-                          torch_to_np)
+                          torch_to_np, discount_cumsum)
 import garage.torch._functions as tu
 from garage.torch.policies import DeterministicMLPPolicy
 
@@ -135,8 +135,8 @@ def test_state_dict_to():
 def test_discount_cumsum():
     discount = 0.99
     x = torch.tensor([5., 10, 20, 100, 0.5, 0.5, 0.5, 0.5, 1000])
-    returns = discount_cumsum(x, discount)
     expected = np_discout_cumsum(torch_to_np(x), discount)
+    returns = discount_cumsum(x, discount)
     assert returns.shape == (len(x), )
     assert np.allclose(expected, torch_to_np(returns))
 

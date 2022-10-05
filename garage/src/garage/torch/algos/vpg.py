@@ -10,10 +10,12 @@ import torch.nn.functional as F
 from garage import log_performance
 from garage.np.algos import RLAlgorithm
 from garage.torch import (as_tensor, compute_advantages, filter_valids,
-                          global_device, ObservationBatch, ObservationOrder)
+                          global_device, ObservationBatch, ObservationOrder,
+                          is_policy_recurrent)
 from garage.torch._functions import (discount_cumsum, pad_packed_tensor,
                                      split_packed_tensor)
-from garage.torch.optimizers import MinibatchOptimizer, SingleBatchOptimizer
+from garage.torch.optimizers import (MinibatchOptimizer, SingleBatchOptimizer,
+                                     EpisodeBatchOptimizer)
 
 
 class VPG(RLAlgorithm):
@@ -63,6 +65,7 @@ class VPG(RLAlgorithm):
         policy,
         value_function,
         sampler,
+        batch_size,
         policy_optimizer=None,
         vf_optimizer=None,
         steps_per_epoch=1,
@@ -77,6 +80,7 @@ class VPG(RLAlgorithm):
         entropy_method='no_entropy',
         recurrent=None,
     ):
+        self.batch_size = batch_size
         self._discount = discount
         self.policy = policy
         self.max_episode_length = env_spec.max_episode_length
@@ -101,7 +105,7 @@ class VPG(RLAlgorithm):
         self._episode_reward_mean = collections.deque(maxlen=100)
         self._sampler = sampler
         if recurrent is None:
-            recurrent = is_policy_recurrent(policy)
+            recurrent = is_policy_recurrent(policy, env_spec)
         self._recurrent = recurrent
 
         if policy_optimizer:
@@ -112,6 +116,7 @@ class VPG(RLAlgorithm):
         else:
             self._policy_optimizer = SingleBatchOptimizer(
                 torch.optim.Adam, policy)
+
         if vf_optimizer:
             self._vf_optimizer = vf_optimizer
         elif self._recurrent:
@@ -119,7 +124,8 @@ class VPG(RLAlgorithm):
                                                        value_function)
         else:
             self._vf_optimizer = MinibatchOptimizer(torch.optim.Adam,
-                                                    value_function)
+                                                    value_function,
+                                                    max_optimization_epochs=2)
 
         self._old_policy = copy.deepcopy(self.policy)
 
@@ -140,15 +146,6 @@ class VPG(RLAlgorithm):
             if policy_ent_coeff != 0.0:
                 raise ValueError('policy_ent_coeff should be zero '
                                  'when there is no entropy method')
-
-    @property
-    def discount(self):
-        """Discount factor used by the algorithm.
-
-        Returns:
-            float: discount factor.
-        """
-        return self._discount
 
     def _train_once(self, eps):
         """Train the algorithm once.
@@ -173,7 +170,7 @@ class VPG(RLAlgorithm):
         ])
         with torch.no_grad():
             baselines = self._value_function(obs)
-        advantages = self._compute_advantage(rewards, lengths, baselines)
+        advantages = self._compute_advantages(rewards, lengths, baselines)
 
         # Log before training
         with torch.no_grad():
@@ -232,7 +229,10 @@ class VPG(RLAlgorithm):
 
         for epoch in trainer.step_epochs():
             for _ in range(self._steps_per_epoch):
-                trainer.step_path = self._sampler.obtain_episodes(epoch)
+                trainer.step_path = self._sampler.obtain_samples(epoch,
+                                                                 self.batch_size,
+                                                                 self.policy)
+                trainer.total_env_steps = self._sampler.total_env_steps
                 self._train_once(trainer.step_path)
             last_return = np.mean(
                 log_performance(epoch,
@@ -319,7 +319,7 @@ class VPG(RLAlgorithm):
         obs_flat = torch.cat(filter_valids(obs, lengths))
         actions_flat = torch.cat(filter_valids(actions, lengths))
         rewards_flat = torch.cat(filter_valids(rewards, lengths))
-        advantages_flat = self._compute_advantage(rewards, lengths, baselines)
+        advantages_flat = self._compute_advantages(rewards, lengths, baselines)
 
         return self._loss_function(obs_flat, actions_flat, rewards_flat,
                                    advantages_flat, lengths)
@@ -359,7 +359,7 @@ class VPG(RLAlgorithm):
         loss = -objectives.mean()
         return loss
 
-    def _compute_advantage(self, rewards, lengths, baselines):
+    def _compute_advantages(self, rewards, lengths, baselines):
         r"""Compute mean value of loss.
 
         Args:
