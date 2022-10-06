@@ -12,12 +12,17 @@ output = CsvOutput("gp_fit.csv")
 logger.add_output(output)
 
 
-def experiment(epochs=100, num_hparams_sampled=50, delta=0.5, seed=100):
+def experiment(epochs=100, num_hparams_sampled=500, delta=0.5, seed=100):
     #kernel = RBF(length_scale=.25, length_scale_bounds="fixed")
     # kernel = RBF(length_scale=.5, length_scale_bounds="fixed")
-    kernel = (Matern(length_scale=0.1, nu=0.5, length_scale_bounds="fixed") +
-              ConstantKernel() +
-              (Matern(length_scale=0.1, nu=0.5, length_scale_bounds="fixed")
+    # kernel = (Matern(length_scale=0.1, nu=0.5, length_scale_bounds="fixed") +
+              # (Matern(length_scale=0.1, nu=1.5, length_scale_bounds="fixed")
+                # * WhiteKernel(1.0)))
+    # kernel = (RBF(length_scale=0.1, length_scale_bounds="fixed") +
+              # (RBF(length_scale=0.1, length_scale_bounds="fixed")
+                # * WhiteKernel(1.0)))
+    kernel = (Matern(length_scale=0.25, nu=1.5, length_scale_bounds="fixed") +
+              (Matern(length_scale=0.25, nu=1.5, length_scale_bounds="fixed")
                 * WhiteKernel()))
     np.random.seed = seed
     gp = GaussianProcessRegressor(kernel=kernel, random_state=seed)
@@ -35,7 +40,8 @@ def experiment(epochs=100, num_hparams_sampled=50, delta=0.5, seed=100):
         sampled_hparams = np.random.sample(size=(num_hparams_sampled, hparam_dims))
         pred_mu, pred_std = gp.predict(sampled_hparams, return_std=True)
         # nu = 1
-        nu = 2
+        # nu = 4
+        nu = 8
         tau_t = 2 * np.log(
             step ** (hparam_dims / 2 + 2) * np.pi**2 / (3 * delta)
         )  # 2*log(t^(d/2+2)π^2/(3δ))
@@ -67,11 +73,20 @@ def plot_gpr(gp, X_train, Y_train, step, algo):
     mean_bel, std_bel = gp.predict(X_bel, return_std=True)
 
     plt.clf()
-    plt.ylim((-10, 10))
+    plt.ylim((-5, 5))
     plt.xlim((0, 1))
     plt.scatter(X_train, Y_train, label="Observations")
     plt.plot(X_bel, mean_bel, label="Mean prediction")
-    plt.plot(X_bel, [algo.true_mean(x) for x in X_bel], label="True mean")
+    true_mean = np.array([algo.true_mean(x) for x in X_bel])
+    plt.plot(X_bel, true_mean, label="True mean")
+    true_noise = np.array([algo.noise_scale(x) for x in X_bel])
+    plt.fill_between(
+        X_bel.ravel(),
+        true_mean - 1.96 * true_noise,
+        true_mean + 1.96 * true_noise,
+        alpha=0.5,
+        label=r"True noise",
+    )
     plt.fill_between(
         X_bel.ravel(),
         mean_bel - 1.96 * std_bel,
