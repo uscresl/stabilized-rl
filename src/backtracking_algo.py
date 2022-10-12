@@ -4,6 +4,7 @@ import cloudpickle
 from dowel import logger
 from garage.np.algos import RLAlgorithm
 
+
 class BacktrackingAlgo(RLAlgorithm):
 
     def __init__(self, inner_algo, perf_statistic='AverageReturn',
@@ -47,4 +48,3 @@ class BacktrackingAlgo(RLAlgorithm):
         for epoch in trainer.step_epochs():
             last_statistics = self.step(trainer, epoch)
         return last_statistics
-

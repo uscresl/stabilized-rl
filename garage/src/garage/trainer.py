@@ -100,6 +100,7 @@ class Trainer:
         self._snapshotter = Snapshotter(snapshot_config.snapshot_dir,
                                         snapshot_config.snapshot_mode,
                                         snapshot_config.snapshot_gap)
+        self.log_directory = snapshot_config.snapshot_dir
 
         self._has_setup = False
         self._plot = False

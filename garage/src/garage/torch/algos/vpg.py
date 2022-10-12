@@ -351,15 +351,23 @@ class VPG(RLAlgorithm):
             torch.Tensor: Calculated negative mean scalar value of objective.
 
         """
+        # print('policy:advantages.mean()', advantages.mean())
+        # print('policy:observations.mean()', observations.mean())
+        # print('policy:actions.mean()', actions.mean())
+        # print('policy:rewards.mean()', rewards.mean())
         objectives = self._compute_objective(advantages, observations, actions,
                                              rewards)
 
+        # print('policy:entropy_regularized', self._entropy_regularzied)
         if self._entropy_regularzied:
             policy_entropies = self._compute_policy_entropy(
                 observations, actions)
             objectives += self._policy_ent_coeff * policy_entropies
 
+        # print('policy:len(objectives)', len(objectives))
         loss = -objectives.mean()
+        if len(objectives) < 100 and loss.item() > 0.1:
+            print('policy:loss', loss.item())
         return loss
 
     def _compute_advantages(self, rewards, lengths, baselines):
