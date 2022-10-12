@@ -55,7 +55,7 @@ def ucb_klpo_pendulum(ctxt=None, seed=1):
     algo = GPUCBAlgo(inner_algo)
 
     trainer.setup(algo, env)
-    trainer.train(n_epochs=100)
+    trainer.train(n_epochs=10000)
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 from collections import deque
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import Matern, WhiteKernel
+from sklearn.gaussian_process.kernels import Matern, WhiteKernel, ConstantKernel
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -8,10 +8,16 @@ from dowel import logger, tabular
 from garage.experiment.deterministic import get_seed
 from garage.np.algos import RLAlgorithm
 
-DEFAULT_GP_KERNEL = (Matern(length_scale=0.1, nu=2.5,
+# DEFAULT_GP_KERNEL = (Matern(length_scale=0.01, nu=1.5,
+                            # length_scale_bounds="fixed") +
+                     # (WhiteKernel() *
+                      # Matern(length_scale=0.01, nu=1.5,
+                             # length_scale_bounds="fixed")))
+DEFAULT_GP_KERNEL = (Matern(length_scale=0.05, nu=0.5,
                             length_scale_bounds="fixed") +
-                     (WhiteKernel(noise_level_bounds=(0.1, 1e5)) *
-                      Matern(length_scale=0.1, nu=2.5,
+                     ConstantKernel() +
+                     (ConstantKernel(0.01) * WhiteKernel() *
+                      Matern(length_scale=0.01, nu=0.5,
                              length_scale_bounds="fixed")))
 
 
@@ -19,7 +25,7 @@ class GPUCBAlgo(RLAlgorithm):
 
     def __init__(self, inner_algo, perf_statistic='AverageReturn',
                  kernel=DEFAULT_GP_KERNEL, epoch_window_size=None,
-                 min_epoch_window_size=None):
+                 min_epoch_window_size=8):
         self.inner_algo = inner_algo
         self.perf_changes = deque(maxlen=epoch_window_size)
         self.hparam_vecs = deque(maxlen=epoch_window_size)
@@ -47,13 +53,13 @@ class GPUCBAlgo(RLAlgorithm):
         return hparams
 
     def step(self, trainer, epoch):
-        if len(self.perf_changes) == 0:
+        if len(self.perf_changes) < self.min_epoch_window_size:
+            vec = np.random.uniform(size=(self.n_hparams,))
+            hparams = self._vec_to_hparams(vec)
+            self.inner_algo.set_hparams(hparams)
             new_stats = self.inner_algo.step(trainer, epoch)
-            hparams = self.inner_algo.get_hparams()
-            vec = self._hparams_to_vec(hparams)
             tabular.record('ExpectedPerfChange', 0)
         else:
-            self.regressor.fit(self.hparam_vecs, self.perf_changes)
             vec = self._select_ucb_hparams(epoch)
             hparams = self._vec_to_hparams(vec)
             self.inner_algo.set_hparams(hparams)
@@ -65,15 +71,16 @@ class GPUCBAlgo(RLAlgorithm):
         if self.prev_algo_perf is not None:
             self.hparam_vecs.append(vec)
             self.perf_changes.append(perf - self.prev_algo_perf)
+            self.regressor.fit(self.hparam_vecs, self.perf_changes)
             for index, (key, value) in enumerate(self.hparam_ranges.items()):
-                self.plot_gpr(f'{trainer.log_directory}/{key}{epoch:05}.png',
+                self.plot_gpr(f'{trainer.log_directory}/{key}_{epoch:05}.png',
                               key, index)
         self.prev_algo_perf = perf
         return new_stats
 
     def _select_ucb_hparams(self, epoch):
-        sampled_hparams = np.random.sample(size=(self.n_hparam_ucb_samples,
-                                                 self.n_hparams))
+        sampled_hparams = np.random.uniform(size=(self.n_hparam_ucb_samples,
+                                                  self.n_hparams))
         pred_mu, pred_std = self.regressor.predict(sampled_hparams,
                                                    return_std=True)
         tau_t = 2 * np.log(
@@ -105,20 +112,23 @@ class GPUCBAlgo(RLAlgorithm):
         return last_statistics
 
     def plot_gpr(self, filename, hparam, hparam_idx):
-        sampled_hparams = np.random.sample(size=(10000, self.n_hparams))
-        X_bel = sampled_hparams[:, hparam_idx]
+        N = 10000
+        X_START = self.hparam_ranges[hparam][0]
+        X_STOP = self.hparam_ranges[hparam][1]
+        X_bel = np.linspace(X_START, X_STOP, num=N)
+        sampled_hparams = np.random.uniform(size=(10000, self.n_hparams))
+        sampled_hparams[:, hparam_idx] = X_bel
         mean_bel, std_bel = self.regressor.predict(sampled_hparams,
                                                    return_std=True)
 
         plt.clf()
         # plt.ylim((-5, 5))
-        plt.xlim((self.hparam_ranges[hparam][0],
-                  self.hparam_ranges[hparam][1]))
+        plt.xlim((X_START, X_STOP))
         plt.scatter([vec[hparam_idx] for vec in self.hparam_vecs],
                     self.perf_changes, label="Observations")
         plt.plot(X_bel, mean_bel, label="Mean prediction")
         plt.fill_between(
-            X_bel.ravel(),
+            X_bel,
             mean_bel - 1.96 * std_bel,
             mean_bel + 1.96 * std_bel,
             alpha=0.5,
