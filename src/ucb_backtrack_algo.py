@@ -3,6 +3,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern, WhiteKernel, ConstantKernel
 import numpy as np
 from matplotlib import pyplot as plt
+import cloudpickle
 
 from dowel import logger, tabular
 from garage.experiment.deterministic import get_seed
@@ -19,24 +20,32 @@ DEFAULT_GP_KERNEL = (Matern(length_scale=0.1, nu=1.5,
                      # ConstantKernel())
 
 
-class GPUCBAlgo(RLAlgorithm):
+class UCBBacktrackAlgo(RLAlgorithm):
 
     def __init__(self, inner_algo, perf_statistic='AverageReturn',
                  kernel=DEFAULT_GP_KERNEL, epoch_window_size=None,
-                 min_epoch_window_size=8, ucb_nu=1.0, ucb_delta=0.5):
-        self.inner_algo = inner_algo
+                 min_epoch_window_size=8, offset_epoch=0, ucb_nu=1.0, ucb_delta=0.5):
+        # UCB
         self.perf_changes = deque(maxlen=epoch_window_size)
         self.hparam_vecs = deque(maxlen=epoch_window_size)
         self.min_epoch_window_size = min_epoch_window_size
         self.regressor = GaussianProcessRegressor(kernel=kernel,
                                                   random_state=get_seed())
-        self.prev_algo_perf = None
-        self.perf_statistic = perf_statistic
         self.hparam_ranges = self.inner_algo.hparam_ranges()
         self.n_hparams = len(self.hparam_ranges)
         self.n_hparam_ucb_samples = 1000
         self.ucb_nu = ucb_nu
         self.ucb_delta = ucb_delta
+
+        # Backtracking
+        self.prev_algo_states = deque(maxlen=offset_epoch + 1)
+        self.offset_epoch = offset_epoch
+
+        # Both
+        self.inner_algo = inner_algo
+        self.prev_algo_perf = None
+        self.perf_statistic = perf_statistic
+
 
     def _hparams_to_vec(self, hparams):
         vec = np.zeros((self.n_hparams,))
@@ -51,6 +60,7 @@ class GPUCBAlgo(RLAlgorithm):
         return hparams
 
     def step(self, trainer, epoch):
+        saved_state = cloudpickle.dumps(self.inner_algo)
         if len(self.perf_changes) < self.min_epoch_window_size:
             vec = np.random.uniform(size=(self.n_hparams,))
             hparams = self._vec_to_hparams(vec)
@@ -66,17 +76,33 @@ class GPUCBAlgo(RLAlgorithm):
             with tabular.prefix('HParams/'):
                 tabular.record(key, value)
         perf = new_stats[self.perf_statistic]
+        backtracked = False
         if self.prev_algo_perf is not None:
+            # Update GP with perf change
             self.hparam_vecs.append(vec)
             self.perf_changes.append(perf - self.prev_algo_perf)
             perf_change_array = np.array(self.perf_changes)
             perf_array_scale = np.sqrt(np.mean(perf_change_array ** 2))
             perf_change_array /= perf_array_scale
+
+            # Fit GP and plot
             self.regressor.fit(self.hparam_vecs, perf_change_array)
             for index, (key, value) in enumerate(self.hparam_ranges.items()):
                 self.plot_gpr(f'{trainer.log_directory}/{key}_{epoch:05}.png',
                               key, index, epoch, perf_array_scale)
-        self.prev_algo_perf = perf
+
+            # Backtrack if necessary
+            if perf < self.prev_algo_perf and \
+               len(self.prev_algo_states) > self.offset_epoch:
+                prev_epoch, state = self.prev_algo_states[self.offset_epoch]
+                self.inner_algo = cloudpickle.loads(state)
+                logger.log(f'Backtracking at epoch {epoch} to epoch {prev_epoch}')
+                backtracked = True
+        if not backtracked:
+            # Save the new state
+            self.prev_algo_states.appendleft(
+                (epoch, saved_state))
+            self.prev_algo_perf = perf
         return new_stats
 
     def _select_ucb_hparams(self, epoch):

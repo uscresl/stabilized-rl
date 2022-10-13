@@ -188,8 +188,8 @@ class KLPO(VPG):
         loss = pg_loss
 
         if self._lr_loss_coeff is not None:
-            loss += self._lr_loss_coeff * likelihood_ratio
+            loss += self._lr_loss_coeff * -likelihood_ratio
         if self._lr_sq_loss_coeff is not None:
-            loss += self._lr_sq_loss_coeff * likelihood_ratio
+            loss += self._lr_sq_loss_coeff * -(likelihood_ratio ** 2)
 
         return loss
