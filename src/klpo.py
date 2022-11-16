@@ -53,12 +53,12 @@ class KLPO(VPG):
         batch_size,
         policy_optimizer=None,
         vf_optimizer=None,
-        lr_clip_range=None,
+        lr_clip_range=0.2,
         lr_loss_coeff=0.01,
         lr_sq_loss_coeff=None,
         discount=0.99,
         gae_lambda=0.97,
-        center_adv=True,
+        center_adv=False,
         positive_adv=False,
         policy_ent_coeff=0.0,
         normalize_pg_loss=True,
@@ -170,12 +170,13 @@ class KLPO(VPG):
         return ret_stat
 
     def _update_pg_loss_scale_rolling_mean(self, pg_loss):
-        scale = pg_loss.std().item()
-        # if scale > 1e2:
-        #     assert False
-        self._pg_loss_scale_mean = (
-            1 - self._pg_loss_alpha
-        ) * self._pg_loss_scale_mean + self._pg_loss_alpha * scale
+        scale = torch.sqrt(torch.mean(pg_loss ** 2)).item()
+        if self._pg_loss_scale_mean == 0.0:
+            self._pg_loss_scale_mean = scale
+        else:
+            self._pg_loss_scale_mean = (
+                1 - self._pg_loss_alpha
+            ) * self._pg_loss_scale_mean + self._pg_loss_alpha * scale
 
     def _compute_objective(self, advantages, obs, actions, rewards):
         r"""Compute objective value.
@@ -200,28 +201,11 @@ class KLPO(VPG):
             old_ll = self._old_policy(obs)[0].log_prob(actions)
         new_ll = self.policy(obs)[0].log_prob(actions)
 
-        # likelihood_ratio = (new_ll - old_ll).exp()  # values are blowing up >1e9!
+        likelihood_ratio = (new_ll - old_ll).exp()
 
-        # Calculate surrogate
-        if self._pg_loss_type == "log_likelihood_ratio":
-            log_likelihood_ratio = new_ll - old_ll
-            ratio_to_use = log_likelihood_ratio
-        else:
-            likelihood_ratio = new_ll.exp() / (
-                old_ll.exp() + 1e-8
-            )  # stabilize the magnitude
-            ratio_to_use = likelihood_ratio
+        pg_loss = new_ll * advantages
 
-        surrogate = ratio_to_use * advantages
-
-        pg_loss = surrogate
-        if self._normalize_pg_loss:
-            self._update_pg_loss_scale_rolling_mean(pg_loss)
-            pg_loss = pg_loss / (self._pg_loss_scale_mean + 1e-8)
-
-        if (self._pg_loss_type == "likelihood_ratio") and (
-            self._lr_clip_range is not None
-        ):
+        if self._lr_clip_range is not None:
             # Clipping the constraint
             likelihood_ratio_clip = torch.clamp(
                 likelihood_ratio,
@@ -230,15 +214,21 @@ class KLPO(VPG):
             )
 
             # Calculate surrotate clip
-            surrogate_clip = ratio_to_use * advantages
+            surrogate_clip = likelihood_ratio_clip * advantages
 
-            pg_loss = torch.min(surrogate, surrogate_clip)
+            pg_loss = torch.min(likelihood_ratio * advantages,
+                                surrogate_clip)
+
+        if self._normalize_pg_loss:
+            self._update_pg_loss_scale_rolling_mean(pg_loss)
+            pg_loss = pg_loss / (self._pg_loss_scale_mean)
 
         loss = pg_loss
 
+        lr_loss = (1 - likelihood_ratio) ** 2
         if self._lr_loss_coeff is not None:
-            loss += self._lr_loss_coeff * -ratio_to_use
+            loss += self._lr_loss_coeff * lr_loss
         if self._lr_sq_loss_coeff is not None:
-            loss += self._lr_sq_loss_coeff * -(ratio_to_use**2)
+            loss += self._lr_sq_loss_coeff * lr_loss ** 2
 
         return loss

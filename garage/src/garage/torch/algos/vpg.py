@@ -219,11 +219,11 @@ class VPG(RLAlgorithm):
                 epoch, self.batch_size, self.policy)
             trainer.record_samples(samples)
             self._train_once(samples)
-        last_return = np.mean(
-            log_performance(epoch,
-                            trainer.step_path,
-                            discount=self._discount))
-        return {'AverageReturn': last_return}
+        undiscounted_returns = log_performance(
+            epoch, trainer.step_path, discount=self._discount)
+        last_return = np.mean(undiscounted_returns)
+        return {'AverageReturn': [last_return],
+                'UndiscountedReturns': undiscounted_returns}
 
     def train(self, trainer):
         """Obtain samplers and start actual training for each epoch.
@@ -366,8 +366,8 @@ class VPG(RLAlgorithm):
 
         # print('policy:len(objectives)', len(objectives))
         loss = -objectives.mean()
-        if len(objectives) < 100 and loss.item() > 0.1:
-            print('policy:loss', loss.item())
+        #if len(objectives) < 100 and loss.item() > 0.1:
+            #print('policy:loss', loss.item())
         return loss
 
     def _compute_advantages(self, rewards, lengths, baselines):
