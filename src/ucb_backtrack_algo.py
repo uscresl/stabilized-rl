@@ -18,18 +18,18 @@ DEFAULT_GP_KERNEL = (
 # length_scale_bounds="fixed") +
 # ConstantKernel())
 
-
 class UCBBacktrackAlgo(RLAlgorithm):
     def __init__(
         self,
         inner_algo,
-        perf_statistic="AverageReturn",
+        perf_statistic="UndiscountedReturns",
         kernel=DEFAULT_GP_KERNEL,
         epoch_window_size=None,
         min_epoch_window_size=8,
         offset_epoch=0,
         ucb_nu=1.0,
         ucb_delta=0.5,
+        backtrack_decrease_prob=0.8,
     ):
 
         # Both
@@ -49,10 +49,12 @@ class UCBBacktrackAlgo(RLAlgorithm):
         self.n_hparam_ucb_samples = 1000
         self.ucb_nu = ucb_nu
         self.ucb_delta = ucb_delta
+        self.prev_hparam_vec = None
 
         # Backtracking
         self.prev_algo_states = deque(maxlen=offset_epoch + 1)
         self.offset_epoch = offset_epoch
+        self.backtrack_decrease_prob = backtrack_decrease_prob
 
     def _hparams_to_vec(self, hparams):
         vec = np.zeros((self.n_hparams,))
@@ -66,17 +68,30 @@ class UCBBacktrackAlgo(RLAlgorithm):
             hparams[k] = vec[i]
         return hparams
 
+    def _should_backtrack(self, perf, prev_perf):
+        if self.backtrack_decrease_prob is None:
+            return np.mean(perf) < np.mean(prev_perf)
+        else:
+            n_samples = 1000
+            perf_samples = np.random.choice(perf, n_samples, replace=True)
+            prev_perf_samples = np.random.choice(prev_perf, n_samples,
+                                                 replace=True)
+            prob_perf_decrease = np.mean(perf_samples < prev_perf_samples)
+            return prob_perf_decrease > self.backtrack_decrease_prob
+
     def step(self, trainer, epoch):
+        # Because we save the state _here_ before running step (and hence
+        # getting perf), offset_epoch == 0.
         saved_state = cloudpickle.dumps(self.inner_algo)
         if len(self.perf_changes) < self.min_epoch_window_size:
-            vec = np.random.uniform(size=(self.n_hparams,))
-            hparams = self._vec_to_hparams(vec)
+            hvec = np.random.uniform(size=(self.n_hparams,))
+            hparams = self._vec_to_hparams(hvec)
             self.inner_algo.set_hparams(hparams)
             new_stats = self.inner_algo.step(trainer, epoch)
             tabular.record("ExpectedPerfChange", 0)
         else:
-            vec = self._select_ucb_hparams(epoch)
-            hparams = self._vec_to_hparams(vec)
+            hvec = self._select_ucb_hparams(epoch)
+            hparams = self._vec_to_hparams(hvec)
             self.inner_algo.set_hparams(hparams)
             new_stats = self.inner_algo.step(trainer, epoch)
         for key, value in hparams.items():
@@ -85,9 +100,11 @@ class UCBBacktrackAlgo(RLAlgorithm):
         perf = new_stats[self.perf_statistic]
         backtracked = False
         if self.prev_algo_perf is not None:
+            assert self.prev_hparam_vec is not None
             # Update GP with perf change
-            self.hparam_vecs.append(vec)
-            self.perf_changes.append(perf - self.prev_algo_perf)
+            self.hparam_vecs.append(self.prev_hparam_vec)
+            self.perf_changes.append(np.mean(perf) -
+                                     np.mean(self.prev_algo_perf))
             perf_change_array = np.array(self.perf_changes)
             perf_array_scale = np.sqrt(np.mean(perf_change_array**2))
             perf_change_array /= perf_array_scale
@@ -105,7 +122,7 @@ class UCBBacktrackAlgo(RLAlgorithm):
 
             # Backtrack if necessary
             if (
-                perf < self.prev_algo_perf
+                self._should_backtrack(perf, self.prev_algo_perf)
                 and len(self.prev_algo_states) > self.offset_epoch
             ):
                 prev_epoch, state = self.prev_algo_states[self.offset_epoch]
@@ -113,9 +130,11 @@ class UCBBacktrackAlgo(RLAlgorithm):
                 logger.log(f"Backtracking at epoch {epoch} to epoch {prev_epoch}")
                 backtracked = True
         if not backtracked:
-            # Save the new state
+            # Save the state from before we did "this step"
+            # Save the performance from this step, which was an evaluation of that state
             self.prev_algo_states.appendleft((epoch, saved_state))
             self.prev_algo_perf = perf
+            self.prev_hparam_vec = hvec
         return new_stats
 
     def _select_ucb_hparams(self, epoch):

@@ -21,7 +21,7 @@ DEFAULT_GP_KERNEL = (Matern(length_scale=0.1, nu=1.5,
 
 class GPUCBAlgo(RLAlgorithm):
 
-    def __init__(self, inner_algo, perf_statistic='AverageReturn',
+    def __init__(self, inner_algo, perf_statistic='UndiscountedReturns',
                  kernel=DEFAULT_GP_KERNEL, epoch_window_size=None,
                  min_epoch_window_size=8, ucb_nu=1.0, ucb_delta=0.5):
         self.inner_algo = inner_algo
@@ -37,6 +37,8 @@ class GPUCBAlgo(RLAlgorithm):
         self.n_hparam_ucb_samples = 1000
         self.ucb_nu = ucb_nu
         self.ucb_delta = ucb_delta
+
+        self.prev_hparam_vec = None
 
     def _hparams_to_vec(self, hparams):
         vec = np.zeros((self.n_hparams,))
@@ -57,6 +59,7 @@ class GPUCBAlgo(RLAlgorithm):
             self.inner_algo.set_hparams(hparams)
             new_stats = self.inner_algo.step(trainer, epoch)
             tabular.record('ExpectedPerfChange', 0)
+            tabular.record('UCB/kt', 0)
         else:
             vec = self._select_ucb_hparams(epoch)
             hparams = self._vec_to_hparams(vec)
@@ -67,8 +70,9 @@ class GPUCBAlgo(RLAlgorithm):
                 tabular.record(key, value)
         perf = new_stats[self.perf_statistic]
         if self.prev_algo_perf is not None:
-            self.hparam_vecs.append(vec)
-            self.perf_changes.append(perf - self.prev_algo_perf)
+            self.hparam_vecs.append(self.prev_hparam_vec)
+            self.perf_changes.append(np.mean(perf) -
+                                     np.mean(self.prev_algo_perf))
             perf_change_array = np.array(self.perf_changes)
             perf_array_scale = np.sqrt(np.mean(perf_change_array ** 2))
             perf_change_array /= perf_array_scale
@@ -77,6 +81,7 @@ class GPUCBAlgo(RLAlgorithm):
                 self.plot_gpr(f'{trainer.log_directory}/{key}_{epoch:05}.png',
                               key, index, epoch, perf_array_scale)
         self.prev_algo_perf = perf
+        self.prev_hparam_vec = vec
         return new_stats
 
     def _select_ucb_hparams(self, epoch):
