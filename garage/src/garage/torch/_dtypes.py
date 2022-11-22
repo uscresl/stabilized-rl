@@ -17,7 +17,7 @@ class ObservationOrder(enum.IntEnum):
 
     """
     # Tensor contains a batch of "most recent" observations.
-    # This ordering is typcially used when performing rollouts, and it is
+    # This ordering is typically used when performing rollouts, and it is
     # expected that stateful policies maintain there own state when using this
     # ordering.
     LAST = 0

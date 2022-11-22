@@ -372,6 +372,14 @@ class ExperimentTemplate:
             gc.collect()  # See dowel issue #44
             return result
 
+    @property
+    def __code__(self):
+        def fake_experiment_function():
+            pass
+        functools.update_wrapper(fake_experiment_function, self.function)
+        fake_experiment_function.__signature__ = self.__signature__
+        return fake_experiment_function.__code__
+
 
 def wrap_experiment(function=None,
                     *,

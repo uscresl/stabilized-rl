@@ -214,6 +214,8 @@ class VPG(RLAlgorithm):
                                vf_loss_before.item() - vf_loss_after.item())
 
     def step(self, trainer, epoch):
+        self.log_directory = trainer.log_directory
+        self.epoch = epoch
         for _ in range(self._steps_per_epoch):
             samples = self._sampler.obtain_samples(
                 epoch, self.batch_size, self.policy)
@@ -366,8 +368,8 @@ class VPG(RLAlgorithm):
 
         # print('policy:len(objectives)', len(objectives))
         loss = -objectives.mean()
-        #if len(objectives) < 100 and loss.item() > 0.1:
-            #print('policy:loss', loss.item())
+        # if len(objectives) < 100 and loss.item() > 0.1:
+            # print('policy:loss', loss.item())
         return loss
 
     def _compute_advantages(self, rewards, lengths, baselines):
