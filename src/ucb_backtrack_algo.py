@@ -55,6 +55,7 @@ class UCBBacktrackAlgo(RLAlgorithm):
         self.prev_algo_states = deque(maxlen=offset_epoch + 1)
         self.offset_epoch = offset_epoch
         self.backtrack_decrease_prob = backtrack_decrease_prob
+        self.total_backtracks = 0
 
     def _hparams_to_vec(self, hparams):
         vec = np.zeros((self.n_hparams,))
@@ -129,12 +130,15 @@ class UCBBacktrackAlgo(RLAlgorithm):
                 self.inner_algo = cloudpickle.loads(state)
                 logger.log(f"Backtracking at epoch {epoch} to epoch {prev_epoch}")
                 backtracked = True
+                self.total_backtracks += 1
         if not backtracked:
             # Save the state from before we did "this step"
             # Save the performance from this step, which was an evaluation of that state
             self.prev_algo_states.appendleft((epoch, saved_state))
             self.prev_algo_perf = perf
             self.prev_hparam_vec = hvec
+        tabular.record('backtracked_now', backtracked)
+        tabular.record('total_backtracks', self.total_backtracks)
         return new_stats
 
     def _select_ucb_hparams(self, epoch):

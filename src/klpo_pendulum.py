@@ -13,8 +13,15 @@ from garage.torch.optimizers import MinibatchOptimizer
 
 from klpo import KLPO
 
-@wrap_experiment
-def klpo_pendulum(ctxt=None, seed=1):
+@wrap_experiment(name_parameters="all")
+def klpo_pendulum(ctxt=None, seed: int=1,
+                  lr_clip_range: float=-1,
+                  lr_loss_coeff: float=0.0,
+                  lr_sq_loss_coeff: float=1e-3,
+                  normalize_pg_loss: bool=False,
+                  target_lr=1.,
+                  learning_rate=2.5e-4,
+                  ):
     """Train PPO with InvertedDoublePendulum-v2 environment.
 
     Args:
@@ -26,13 +33,18 @@ def klpo_pendulum(ctxt=None, seed=1):
     """
     set_seed(seed)
     env = GymEnv('InvertedDoublePendulum-v2')
+    if lr_clip_range <= 0:
+        lr_clip_range = None
+    if lr_loss_coeff <= 0:
+        lr_loss_coeff = 0.
 
     trainer = Trainer(ctxt)
 
     policy = GaussianMLPPolicy(env.spec,
                                hidden_sizes=[64, 64],
                                hidden_nonlinearity=torch.tanh,
-                               output_nonlinearity=None)
+                               output_nonlinearity=None,
+                               min_std=None)
 
     value_function = GaussianMLPValueFunction(env_spec=env.spec,
                                               hidden_sizes=(32, 32),
@@ -48,6 +60,13 @@ def klpo_pendulum(ctxt=None, seed=1):
         policy=policy,
         value_function=value_function,
         sampler=sampler,
+        lr_clip_range=lr_clip_range,
+        lr_loss_coeff=lr_loss_coeff,
+        lr_sq_loss_coeff=lr_sq_loss_coeff,
+        normalize_pg_loss=normalize_pg_loss,
+        target_lr=target_lr,
+        learning_rate=learning_rate,
+        center_adv=True,
         discount=0.99,
         batch_size=10000)
 

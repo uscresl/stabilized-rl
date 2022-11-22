@@ -1,9 +1,12 @@
 """KL-Regularized Policy Optimization (KLPO)."""
 import torch
+import seaborn as sns
+import matplotlib.pyplot as plt
 from dowel import tabular
 from garage.torch import is_policy_recurrent
 from garage.torch.algos import VPG
 from garage.torch.optimizers import EpisodeBatchOptimizer, MinibatchOptimizer
+
 
 
 class KLPO(VPG):
@@ -53,15 +56,17 @@ class KLPO(VPG):
         batch_size,
         policy_optimizer=None,
         vf_optimizer=None,
-        lr_clip_range=0.2,
-        lr_loss_coeff=0.01,
+        lr_clip_range=None,
+        lr_loss_coeff=None,
         lr_sq_loss_coeff=None,
+        learning_rate=2.5e-4,
         discount=0.99,
         gae_lambda=0.97,
         center_adv=False,
         positive_adv=False,
         policy_ent_coeff=0.0,
-        normalize_pg_loss=True,
+        normalize_pg_loss=False,
+        target_lr=1.0,
         pg_loss_alpha=0.001,
         use_softplus_entropy=False,
         stop_entropy_gradient=False,
@@ -81,14 +86,14 @@ class KLPO(VPG):
         if policy_optimizer is None:
             if recurrent:
                 policy_optimizer = EpisodeBatchOptimizer(
-                    (torch.optim.Adam, dict(lr=2.5e-4)),
+                    (torch.optim.Adam, dict(lr=learning_rate)),
                     policy,
                     max_optimization_epochs=10,
                     minibatch_size=64,
                 )
             else:
                 policy_optimizer = MinibatchOptimizer(
-                    (torch.optim.Adam, dict(lr=2.5e-4)),
+                    (torch.optim.Adam, dict(lr=learning_rate)),
                     policy,
                     max_optimization_epochs=10,
                     minibatch_size=64,
@@ -97,14 +102,14 @@ class KLPO(VPG):
         if vf_optimizer is None:
             if recurrent:
                 vf_optimizer = EpisodeBatchOptimizer(
-                    (torch.optim.Adam, dict(lr=2.5e-4)),
+                    (torch.optim.Adam, dict(lr=learning_rate)),
                     value_function,
                     max_optimization_epochs=10,
                     minibatch_size=64,
                 )
             else:
                 vf_optimizer = MinibatchOptimizer(
-                    (torch.optim.Adam, dict(lr=2.5e-4)),
+                    (torch.optim.Adam, dict(lr=learning_rate)),
                     value_function,
                     max_optimization_epochs=10,
                     minibatch_size=64,
@@ -135,6 +140,7 @@ class KLPO(VPG):
         self._normalize_pg_loss = normalize_pg_loss
         self._pg_loss_alpha = pg_loss_alpha
         self._pg_loss_scale_mean = 0.0
+        self._target_lr = target_lr
 
     def hparam_ranges(self):
         hparam_ranges = {}
@@ -164,6 +170,10 @@ class KLPO(VPG):
         if "lr_sq_loss_coeff" in hparams:
             self._lr_sq_loss_coeff = hparams["lr_sq_loss_coeff"]
 
+    def _train_value_function(self, obs, returns, lengths):
+        for _ in range(1):
+            super()._train_value_function(obs, returns, lengths)
+
     def step(self, trainer, epoch):
         ret_stat = super().step(trainer, epoch)
         tabular.record("pg_loss_scale_mean", self._pg_loss_scale_mean)
@@ -173,7 +183,7 @@ class KLPO(VPG):
         scale = torch.sqrt(torch.mean(pg_loss ** 2)).item()
         if self._pg_loss_scale_mean == 0.0:
             self._pg_loss_scale_mean = scale
-        else:
+        elif scale < 1000:
             self._pg_loss_scale_mean = (
                 1 - self._pg_loss_alpha
             ) * self._pg_loss_scale_mean + self._pg_loss_alpha * scale
@@ -200,6 +210,12 @@ class KLPO(VPG):
         with torch.no_grad():
             old_ll = self._old_policy(obs)[0].log_prob(actions)
         new_ll = self.policy(obs)[0].log_prob(actions)
+        # print('last_minibatch/new_ll.shape',
+                       # str(new_ll.shape))
+        # print('last_minibatch/obs.shape',
+                       # str(obs.shape))
+        # print('last_minibatch/actions.shape',
+                       # str(actions.shape))
 
         likelihood_ratio = (new_ll - old_ll).exp()
 
@@ -209,9 +225,20 @@ class KLPO(VPG):
             # Clipping the constraint
             likelihood_ratio_clip = torch.clamp(
                 likelihood_ratio,
-                min=1 - self._lr_clip_range,
-                max=1 + self._lr_clip_range,
+                min=self._target_lr - self._lr_clip_range,
+                max=self._target_lr + self._lr_clip_range,
             )
+            # print(likelihood_ratio != likelihood_ratio_clip)
+            # print('n_clipped', torch.sum(likelihood_ratio != likelihood_ratio_clip))
+            n_clipped = torch.sum(likelihood_ratio != likelihood_ratio_clip).item()
+            tabular.record('last_minibatch/n_clipped', n_clipped)
+            if n_clipped == 0:
+                tabular.record('last_minibatch/avg_clip_distance', 0)
+            else:
+                tabular.record('last_minibatch/avg_clip_distance',
+                            torch.sum((likelihood_ratio != likelihood_ratio_clip) *
+                                        torch.abs(likelihood_ratio - 1)).item()
+                            / n_clipped)
 
             # Calculate surrotate clip
             surrogate_clip = likelihood_ratio_clip * advantages
@@ -224,8 +251,20 @@ class KLPO(VPG):
             pg_loss = pg_loss / (self._pg_loss_scale_mean)
 
         loss = pg_loss
+        # print('last_minibatch/pg_loss.shape',
+                       # str(pg_loss.shape))
+        tabular.record('last_minibatch/pg_loss_mean',
+                       torch.mean(pg_loss).item())
 
-        lr_loss = (1 - likelihood_ratio) ** 2
+        if len(obs) > 512:
+            plt.clf()
+            plt.xlim((0, 2))
+            sns.kdeplot(data=likelihood_ratio)
+            plt.savefig(f"{self.log_directory}/likelihood_ratio_epoch_{self.epoch:05}.png")
+
+        lr_loss = (self._target_lr - likelihood_ratio) ** 2
+        tabular.record('last_minibatch/lr_loss_mean',
+                       torch.mean(lr_loss).item())
         if self._lr_loss_coeff is not None:
             loss += self._lr_loss_coeff * lr_loss
         if self._lr_sq_loss_coeff is not None:
