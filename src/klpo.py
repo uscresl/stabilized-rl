@@ -6,7 +6,7 @@ from dowel import tabular
 from garage.torch import is_policy_recurrent
 from garage.torch.algos import VPG
 from garage.torch.optimizers import EpisodeBatchOptimizer, MinibatchOptimizer
-
+from torch.distributions.kl import kl_divergence
 
 
 class KLPO(VPG):
@@ -77,9 +77,9 @@ class KLPO(VPG):
         if recurrent is None:
             recurrent = is_policy_recurrent(policy, env_spec)
 
-        if pg_loss_type not in {"log_likelihood_ratio", "likelihood_ratio"}:
+        if pg_loss_type not in {"likelihood_ratio", "kl_div"}:
             raise ValueError(
-                f"pg_loss_type can only be 'likelihood_ratio' or 'log_likelihood_ratio' got {pg_loss_type}"
+                f"pg_loss_type can only be 'likelihood_ratio' or 'kl_div' got {pg_loss_type}"
             )
         self._pg_loss_type = pg_loss_type
 
@@ -180,7 +180,7 @@ class KLPO(VPG):
         return ret_stat
 
     def _update_pg_loss_scale_rolling_mean(self, pg_loss):
-        scale = torch.sqrt(torch.mean(pg_loss ** 2)).item()
+        scale = torch.sqrt(torch.mean(pg_loss**2)).item()
         if self._pg_loss_scale_mean == 0.0:
             self._pg_loss_scale_mean = scale
         elif scale < 1000:
@@ -208,20 +208,29 @@ class KLPO(VPG):
         """
         # Compute constraint
         with torch.no_grad():
-            old_ll = self._old_policy(obs)[0].log_prob(actions)
-        new_ll = self.policy(obs)[0].log_prob(actions)
+            old_dist = self._old_policy(obs)[0]
+            old_ll = old_dist.log_prob(actions)
+        new_dist = self.policy(obs)[0]
+        new_ll = new_dist.log_prob(actions)
         # print('last_minibatch/new_ll.shape',
-                       # str(new_ll.shape))
+        # str(new_ll.shape))
         # print('last_minibatch/obs.shape',
-                       # str(obs.shape))
+        # str(obs.shape))
         # print('last_minibatch/actions.shape',
-                       # str(actions.shape))
+        # str(actions.shape))
 
         likelihood_ratio = (new_ll - old_ll).exp()
 
-        pg_loss = new_ll * advantages
+        if self._pg_loss_type == "kl_div":
+            kl_div = kl_divergence(new_dist.base_dist, old_dist.base_dist).flatten()
+            tabular.record("last_minibatch/kl_div_mean", kl_div.mean().item())
 
-        if self._lr_clip_range is not None:
+        # pg_loss = new_ll * advantages
+        pg_loss = likelihood_ratio * advantages
+
+        if (self._pg_loss_type == "likelihood_ratio") and (
+            self._lr_clip_range is not None
+        ):
             # Clipping the constraint
             likelihood_ratio_clip = torch.clamp(
                 likelihood_ratio,
@@ -231,20 +240,23 @@ class KLPO(VPG):
             # print(likelihood_ratio != likelihood_ratio_clip)
             # print('n_clipped', torch.sum(likelihood_ratio != likelihood_ratio_clip))
             n_clipped = torch.sum(likelihood_ratio != likelihood_ratio_clip).item()
-            tabular.record('last_minibatch/n_clipped', n_clipped)
+            tabular.record("last_minibatch/n_clipped", n_clipped)
             if n_clipped == 0:
-                tabular.record('last_minibatch/avg_clip_distance', 0)
+                tabular.record("last_minibatch/avg_clip_distance", 0)
             else:
-                tabular.record('last_minibatch/avg_clip_distance',
-                            torch.sum((likelihood_ratio != likelihood_ratio_clip) *
-                                        torch.abs(likelihood_ratio - 1)).item()
-                            / n_clipped)
+                tabular.record(
+                    "last_minibatch/avg_clip_distance",
+                    torch.sum(
+                        (likelihood_ratio != likelihood_ratio_clip)
+                        * torch.abs(likelihood_ratio - 1)
+                    ).item()
+                    / n_clipped,
+                )
 
             # Calculate surrotate clip
             surrogate_clip = likelihood_ratio_clip * advantages
 
-            pg_loss = torch.min(likelihood_ratio * advantages,
-                                surrogate_clip)
+            pg_loss = torch.min(likelihood_ratio * advantages, surrogate_clip)
 
         if self._normalize_pg_loss:
             self._update_pg_loss_scale_rolling_mean(pg_loss)
@@ -252,22 +264,27 @@ class KLPO(VPG):
 
         loss = pg_loss
         # print('last_minibatch/pg_loss.shape',
-                       # str(pg_loss.shape))
-        tabular.record('last_minibatch/pg_loss_mean',
-                       torch.mean(pg_loss).item())
+        # str(pg_loss.shape))
+        tabular.record("last_minibatch/pg_loss_mean", torch.mean(pg_loss).item())
 
         if len(obs) > 512:
             plt.clf()
-            plt.xlim((0, 2))
+            plt.xlim((0, 5))
             sns.kdeplot(data=likelihood_ratio)
-            plt.savefig(f"{self.log_directory}/likelihood_ratio_epoch_{self.epoch:05}.png")
-
-        lr_loss = (self._target_lr - likelihood_ratio) ** 2
-        tabular.record('last_minibatch/lr_loss_mean',
-                       torch.mean(lr_loss).item())
-        if self._lr_loss_coeff is not None:
-            loss += self._lr_loss_coeff * lr_loss
-        if self._lr_sq_loss_coeff is not None:
-            loss += self._lr_sq_loss_coeff * lr_loss ** 2
-
+            plt.savefig(
+                f"{self.log_directory}/likelihood_ratio_epoch_{self.epoch:05}.png"
+            )
+        if self._pg_loss_type == "kl_div":
+            if self._lr_loss_coeff is not None:
+                loss += self._lr_loss_coeff * -kl_div
+            if self._lr_sq_loss_coeff is not None:
+                loss += self._lr_sq_loss_coeff * -(kl_div**2)
+        else:
+            lr_loss = (self._target_lr - likelihood_ratio) ** 2
+            tabular.record("last_minibatch/lr_loss_mean", torch.mean(lr_loss).item())
+            if self._lr_loss_coeff is not None:
+                loss += self._lr_loss_coeff * -lr_loss
+            if self._lr_sq_loss_coeff is not None:
+                loss += self._lr_sq_loss_coeff * -(lr_loss**2)
+        tabular.record("last_minibatch/loss_mean", torch.mean(loss).item())
         return loss

@@ -13,15 +13,20 @@ from garage.torch.optimizers import MinibatchOptimizer
 
 from klpo import KLPO
 
+
 @wrap_experiment(name_parameters="all")
-def klpo_pendulum(ctxt=None, seed: int=1,
-                  lr_clip_range: float=-1,
-                  lr_loss_coeff: float=0.0,
-                  lr_sq_loss_coeff: float=1e-3,
-                  normalize_pg_loss: bool=False,
-                  target_lr=1.,
-                  learning_rate=2.5e-4,
-                  ):
+def klpo_pendulum(
+    ctxt=None,
+    pg_loss_type: str = "kl_div",
+    seed: int = 1,
+    lr_clip_range: float = -1,
+    lr_loss_coeff: float = 5e-4,
+    lr_sq_loss_coeff: float = 5e-4,
+    normalize_pg_loss: bool = False,
+    target_lr=1.0,
+    learning_rate=2.5e-4,
+    note="pg_loss=ratio*adv",
+):
     """Train PPO with InvertedDoublePendulum-v2 environment.
 
     Args:
@@ -32,28 +37,32 @@ def klpo_pendulum(ctxt=None, seed: int=1,
 
     """
     set_seed(seed)
-    env = GymEnv('InvertedDoublePendulum-v2')
+    env = GymEnv("InvertedDoublePendulum-v2")
     if lr_clip_range <= 0:
         lr_clip_range = None
     if lr_loss_coeff <= 0:
-        lr_loss_coeff = 0.
+        lr_loss_coeff = 0.0
 
     trainer = Trainer(ctxt)
 
-    policy = GaussianMLPPolicy(env.spec,
-                               hidden_sizes=[64, 64],
-                               hidden_nonlinearity=torch.tanh,
-                               output_nonlinearity=None,
-                               min_std=None)
+    policy = GaussianMLPPolicy(
+        env.spec,
+        hidden_sizes=[64, 64],
+        hidden_nonlinearity=torch.tanh,
+        output_nonlinearity=None,
+        min_std=None,
+    )
 
-    value_function = GaussianMLPValueFunction(env_spec=env.spec,
-                                              hidden_sizes=(32, 32),
-                                              hidden_nonlinearity=torch.tanh,
-                                              output_nonlinearity=None)
+    value_function = GaussianMLPValueFunction(
+        env_spec=env.spec,
+        hidden_sizes=(32, 32),
+        hidden_nonlinearity=torch.tanh,
+        output_nonlinearity=None,
+    )
 
-    sampler = LocalSampler(agents=policy,
-                           envs=env,
-                           max_episode_length=env.spec.max_episode_length)
+    sampler = LocalSampler(
+        agents=policy, envs=env, max_episode_length=env.spec.max_episode_length
+    )
 
     algo = KLPO(
         env_spec=env.spec,
@@ -68,11 +77,13 @@ def klpo_pendulum(ctxt=None, seed: int=1,
         learning_rate=learning_rate,
         center_adv=True,
         discount=0.99,
-        batch_size=10000)
+        batch_size=10000,
+        pg_loss_type=pg_loss_type,
+    )
 
     trainer.setup(algo, env)
     trainer.train(n_epochs=100)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     clize.run(klpo_pendulum)
