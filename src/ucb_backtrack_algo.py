@@ -85,7 +85,11 @@ class UCBBacktrackAlgo(RLAlgorithm):
         # getting perf), offset_epoch == 0.
         saved_state = cloudpickle.dumps(self.inner_algo)
         if len(self.perf_changes) < self.min_epoch_window_size:
-            hvec = np.random.uniform(size=(self.n_hparams,))
+            hvec = np.random.uniform(
+                low=[x[0] for x in self.hparam_ranges.values()],
+                high=[x[1] for x in self.hparam_ranges.values()],
+                size=(self.n_hparams,),
+            )
             hparams = self._vec_to_hparams(hvec)
             self.inner_algo.set_hparams(hparams)
             new_stats = self.inner_algo.step(trainer, epoch)
@@ -142,7 +146,9 @@ class UCBBacktrackAlgo(RLAlgorithm):
 
     def _select_ucb_hparams(self, epoch):
         sampled_hparams = np.random.uniform(
-            size=(self.n_hparam_ucb_samples, self.n_hparams)
+            low=[x[0] for x in self.hparam_ranges.values()],
+            high=[x[1] for x in self.hparam_ranges.values()],
+            size=(self.n_hparam_ucb_samples, self.n_hparams),
         )
         pred_mu, pred_std = self.regressor.predict(sampled_hparams, return_std=True)
         tau_t = 2 * np.log(
