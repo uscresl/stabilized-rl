@@ -20,8 +20,8 @@ def klpo_pendulum(
     pg_loss_type: str = "kl_div",
     seed: int = 1,
     lr_clip_range: float = -1,
-    lr_loss_coeff: float = 5e-4,
-    lr_sq_loss_coeff: float = 5e-4,
+    lr_loss_coeff: float = 1e-3,
+    lr_sq_loss_coeff: float = 1e-3,
     normalize_pg_loss: bool = False,
     target_lr=1.0,
     learning_rate=2.5e-4,
@@ -82,7 +82,7 @@ def klpo_pendulum(
     )
 
     trainer.setup(algo, env)
-    trainer.train(n_epochs=100)
+    trainer.train(n_epochs=150)
 
 
 if __name__ == "__main__":
