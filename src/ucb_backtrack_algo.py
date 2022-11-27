@@ -18,6 +18,7 @@ DEFAULT_GP_KERNEL = (
 # length_scale_bounds="fixed") +
 # ConstantKernel())
 
+
 class UCBBacktrackAlgo(RLAlgorithm):
     def __init__(
         self,
@@ -75,8 +76,7 @@ class UCBBacktrackAlgo(RLAlgorithm):
         else:
             n_samples = 1000
             perf_samples = np.random.choice(perf, n_samples, replace=True)
-            prev_perf_samples = np.random.choice(prev_perf, n_samples,
-                                                 replace=True)
+            prev_perf_samples = np.random.choice(prev_perf, n_samples, replace=True)
             prob_perf_decrease = np.mean(perf_samples < prev_perf_samples)
             return prob_perf_decrease > self.backtrack_decrease_prob
 
@@ -104,8 +104,7 @@ class UCBBacktrackAlgo(RLAlgorithm):
             assert self.prev_hparam_vec is not None
             # Update GP with perf change
             self.hparam_vecs.append(self.prev_hparam_vec)
-            self.perf_changes.append(np.mean(perf) -
-                                     np.mean(self.prev_algo_perf))
+            self.perf_changes.append(np.mean(perf) - np.mean(self.prev_algo_perf))
             perf_change_array = np.array(self.perf_changes)
             perf_array_scale = np.sqrt(np.mean(perf_change_array**2))
             perf_change_array /= perf_array_scale
@@ -137,8 +136,8 @@ class UCBBacktrackAlgo(RLAlgorithm):
             self.prev_algo_states.appendleft((epoch, saved_state))
             self.prev_algo_perf = perf
             self.prev_hparam_vec = hvec
-        tabular.record('backtracked_now', backtracked)
-        tabular.record('total_backtracks', self.total_backtracks)
+        tabular.record("backtracked_now", backtracked)
+        tabular.record("total_backtracks", self.total_backtracks)
         return new_stats
 
     def _select_ucb_hparams(self, epoch):
@@ -175,12 +174,12 @@ class UCBBacktrackAlgo(RLAlgorithm):
 
     def plot_gpr(self, filename, hparam, hparam_idx, epoch, perf_array_scale):
         N = 10000
-        X_START = self.hparam_ranges[hparam][0]
-        X_STOP = self.hparam_ranges[hparam][1]
+        X_START = [x[0] for x in self.hparam_ranges.values()]
+        X_STOP = [x[1] for x in self.hparam_ranges.values()]
         X_bel = np.linspace(X_START, X_STOP, num=N)
-        sampled_hparams = np.random.uniform(size=(10000, self.n_hparams))
-        sampled_hparams[:, hparam_idx] = X_bel
-        mean_bel, std_bel = self.regressor.predict(sampled_hparams, return_std=True)
+        # sampled_hparams = np.random.uniform(size=(N, self.n_hparams))
+        # sampled_hparams[:, hparam_idx] = X_bel
+        mean_bel, std_bel = self.regressor.predict(X_bel, return_std=True)
         mean_bel *= perf_array_scale
         std_bel *= perf_array_scale
         tau_t = 2 * np.log(
@@ -192,15 +191,15 @@ class UCBBacktrackAlgo(RLAlgorithm):
 
         plt.clf()
         # plt.ylim((-5, 5))
-        plt.xlim((X_START, X_STOP))
+        plt.xlim((X_START[hparam_idx], X_STOP[hparam_idx]))
         plt.scatter(
             [vec[hparam_idx] for vec in self.hparam_vecs],
             self.perf_changes,
             label="Observations",
         )
-        plt.plot(X_bel, mean_bel, label="Mean prediction")
+        plt.plot(X_bel[:, hparam_idx], mean_bel, label="Mean prediction")
         plt.fill_between(
-            X_bel,
+            X_bel[:, hparam_idx],
             mean_bel - ucb,
             mean_bel + ucb,
             alpha=0.5,
