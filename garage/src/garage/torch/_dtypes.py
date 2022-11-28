@@ -92,7 +92,9 @@ class ObservationBatch(torch.Tensor):
         return self
 
     def __repr__(self):
-        return f'{type(self).__name__}({super().__repr__()}, order={self.order!r}, lengths={self.lengths!r})'
+        order = getattr(self, 'order', None)
+        lengths = getattr(self, 'lengths', None)
+        return f'{type(self).__name__}({super().__repr__()}, order={order!r}, lengths={lengths!r})'
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
