@@ -61,13 +61,15 @@ class UCBBacktrackAlgo(RLAlgorithm):
     def _hparams_to_vec(self, hparams):
         vec = np.zeros((self.n_hparams,))
         for i, k in enumerate(self.hparam_ranges.keys()):
-            vec[i] = hparams[k]
+            start, end = self.hparam_ranges[k]
+            vec[i] = (hparams[k] - start) / (end - start)
         return vec
 
     def _vec_to_hparams(self, vec):
         hparams = {}
         for i, k in enumerate(self.hparam_ranges.keys()):
-            hparams[k] = vec[i]
+            start, end = self.hparam_ranges[k]
+            hparams[k] = vec[i] * (end - start) + start
         return hparams
 
     def _should_backtrack(self, perf, prev_perf):
@@ -86,8 +88,8 @@ class UCBBacktrackAlgo(RLAlgorithm):
         saved_state = cloudpickle.dumps(self.inner_algo)
         if len(self.perf_changes) < self.min_epoch_window_size:
             hvec = np.random.uniform(
-                low=[x[0] for x in self.hparam_ranges.values()],
-                high=[x[1] for x in self.hparam_ranges.values()],
+                low=0.,
+                high=1.,
                 size=(self.n_hparams,),
             )
             hparams = self._vec_to_hparams(hvec)
@@ -146,8 +148,8 @@ class UCBBacktrackAlgo(RLAlgorithm):
 
     def _select_ucb_hparams(self, epoch):
         sampled_hparams = np.random.uniform(
-            low=[x[0] for x in self.hparam_ranges.values()],
-            high=[x[1] for x in self.hparam_ranges.values()],
+            low=0.,
+            high=1.,
             size=(self.n_hparam_ucb_samples, self.n_hparams),
         )
         pred_mu, pred_std = self.regressor.predict(sampled_hparams, return_std=True)
@@ -182,7 +184,8 @@ class UCBBacktrackAlgo(RLAlgorithm):
         N = 10000
         X_START = [x[0] for x in self.hparam_ranges.values()]
         X_STOP = [x[1] for x in self.hparam_ranges.values()]
-        X_bel = np.linspace(X_START, X_STOP, num=N)
+        X_bel_plot = np.linspace(X_START, X_STOP, num=N)
+        X_bel = np.linspace([0.] * self.n_hparams, [1.] * self.n_hparams, num=N)
         # sampled_hparams = np.random.uniform(size=(N, self.n_hparams))
         # sampled_hparams[:, hparam_idx] = X_bel
         mean_bel, std_bel = self.regressor.predict(X_bel, return_std=True)
@@ -203,16 +206,16 @@ class UCBBacktrackAlgo(RLAlgorithm):
             self.perf_changes,
             label="Observations",
         )
-        plt.plot(X_bel[:, hparam_idx], mean_bel, label="Mean prediction")
+        plt.plot(X_bel_plot[:, hparam_idx], mean_bel, label="Mean prediction")
         plt.fill_between(
-            X_bel[:, hparam_idx],
+            X_bel_plot[:, hparam_idx],
             mean_bel - ucb,
             mean_bel + ucb,
             alpha=0.5,
             label=r"UCB Decision Surface",
         )
         # plt.fill_between(
-        # X_bel,
+        # X_bel_plot,
         # mean_bel - 1.96 * std_bel,
         # mean_bel + 1.96 * std_bel,
         # alpha=0.5,
