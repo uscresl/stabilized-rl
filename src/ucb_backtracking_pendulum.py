@@ -16,9 +16,14 @@ from gp_ucb_algo import GPUCBAlgo
 from ucb_backtrack_algo import UCBBacktrackAlgo
 
 
-@wrap_experiment(name_parameters="all")
+@wrap_experiment(name_parameters="all", prefix="experiment/ucb_backtracking_kl_div")
 def ucb_backtracking_pendulum(
-    ctxt=None, seed=1, kernel_length_scale=0.05, pg_loss_type="log_likelihood_ratio"
+    ctxt=None,
+    seed=1,
+    pg_loss_type="kl_div",
+    kernel_length_scale=0.01,
+    learning_rate=2.5e-4,
+    note="reduced_hparam_range",
 ):
     """Train PPO with InvertedDoublePendulum-v2 environment.
 
@@ -59,7 +64,11 @@ def ucb_backtracking_pendulum(
         sampler=sampler,
         discount=0.99,
         batch_size=10000,
+        lr_loss_coeff=0.1,
+        lr_sq_loss_coeff=0.1,
         pg_loss_type=pg_loss_type,
+        learning_rate=learning_rate,
+        center_adv=True,
     )
 
     kernel = (
@@ -67,11 +76,13 @@ def ucb_backtracking_pendulum(
         + ConstantKernel()
         + (
             WhiteKernel()
-            * Matern(length_scale=0.1, nu=1.5, length_scale_bounds="fixed")
+            * Matern(
+                length_scale=kernel_length_scale, nu=1.5, length_scale_bounds="fixed"
+            )
         )
     )
 
-    algo = UCBBacktrackAlgo(inner_algo)
+    algo = UCBBacktrackAlgo(inner_algo, kernel=kernel)
 
     trainer.setup(algo, env)
     trainer.train(n_epochs=10000)

@@ -147,9 +147,9 @@ class KLPO(VPG):
         if self._lr_clip_range is not None:
             hparam_ranges["lr_clip_range"] = (0.0, 1.0)
         if self._lr_loss_coeff is not None:
-            hparam_ranges["lr_loss_coeff"] = (0.0, 1.0)
+            hparam_ranges["lr_loss_coeff"] = (0.0, 0.2)
         if self._lr_sq_loss_coeff is not None:
-            hparam_ranges["lr_sq_loss_coeff"] = (0.0, 1.0)
+            hparam_ranges["lr_sq_loss_coeff"] = (0.0, 0.2)
         return hparam_ranges
 
     def get_hparams(self):
