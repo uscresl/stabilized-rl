@@ -199,9 +199,12 @@ class Context:
         if needs_output and not has_inputs:
             print("Commands exist without any way to acquire inputs:",
                   needs_output)
-        fits_in_ram = _filter_cmds_ram(has_inputs,
-                                       reserved_ram_gb=self.reserved_ram_gb,
-                                       ram_gb_cap=self.ram_gb_cap)
+        if _USING_SLURM:
+            fits_in_ram = has_inputs
+        else:
+            fits_in_ram = _filter_cmds_ram(
+                    has_inputs, reserved_ram_gb=self.reserved_ram_gb,
+                    ram_gb_cap=self.ram_gb_cap)
         not_running = self._filter_cmds_running(fits_in_ram)
         return not_running, not bool(needs_output)
 
@@ -227,7 +230,7 @@ class Context:
         stderr = open(os.path.join(cmd_dir, "stderr.txt"), "w")
         args = _cmd_to_args(cmd, self.data_dir)
         print(" ".join(args))
-        proc = _run_process(args, stdout=stdout, stderr=stderr)
+        proc = _run_process(args, ram_gb=cmd.ram_gb, stdout=stdout, stderr=stderr)
         print(proc.pid)
         self.warmup_deadline = time.monotonic() + cmd.warmup_time
         self.running.append((cmd, proc))

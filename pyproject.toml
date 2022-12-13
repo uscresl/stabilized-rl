@@ -10,13 +10,10 @@ packages = [
 [tool.poetry.dependencies]
 python = ">=3.8, <3.11"
 metaworld = {path = "./metaworld", develop = true}
-ipdb = "^0.13.2"
 torch = "^1.12.1"
-garage = {path = "./garage", develop = true, extras = ["gym"]}
+garage = {path = "./garage", develop = true}
 clize = "^4.1.1"
-pytest = "^5.4.3"
 sympy = "^1.6.1"
-jupyter = "^1.0.0"
 pandas = "^1.1.3"
 matplotlib = "^3.3.2"
 seaborn = "^0.11.0"
@@ -25,11 +22,17 @@ enum34 = "1.1.8"
 rpyc = "^5.0.1"
 toml = "^0.10.2"
 numpy = ">1.22"
-tensorboard = "^2.6.0"
 ray = "^2.0.0"
 mujoco-py = "^2.1.2"
 scikit-learn = "^1.1.2"
 tqdm = "^4.64.1"
+gym = "^0.17.2"
+
+[tool.poetry.dev-dependencies]
+tensorboard = "^2.6.0"
+jupyter = "^1.0.0"
+pytest = "^5.4.3"
+ipdb = "^0.13.2"
 
 [build-system]
 requires = ["poetry>=0.12"]

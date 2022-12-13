@@ -4,7 +4,7 @@ import torch
 from garage import wrap_experiment
 from garage.envs import GymEnv
 from garage.experiment.deterministic import set_seed
-from garage.sampler import RaySampler, LocalSampler
+from garage.sampler import LocalSampler
 from garage.torch.algos import PPO
 from garage.torch.policies import GaussianMLPPolicy
 from garage.torch.value_functions import GaussianMLPValueFunction
