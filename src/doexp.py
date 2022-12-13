@@ -128,7 +128,7 @@ class Context:
     @property
     def ram_gb_cap(self):
         return (self._vm_percent_cap * psutil.virtual_memory().total /
-                _BYTES_PER_GB)
+                (100.0 * _BYTES_PER_GB))
 
     @property
     def vm_percent_cap(self):
@@ -145,8 +145,7 @@ class Context:
         '''Runs all commands listed in the file.'''
         done = False
         while not done:
-            done = True
-            ready_cmds = self._refresh_commands(filename)
+            ready_cmds, done = self._refresh_commands(filename)
             if self._ready() and ready_cmds:
                 self.run_cmd(ready_cmds[0])
                 done = False
@@ -162,7 +161,7 @@ class Context:
     def _ready(self):
         '''Checks global readiness conditions.'''
         if (self.max_concurrent_jobs is not None and
-            len(self.running) >= self.max_concurrent_jobs):
+                len(self.running) >= self.max_concurrent_jobs):
             return False
         if time.monotonic() < self.warmup_deadline:
             return False
@@ -180,7 +179,8 @@ class Context:
             else:
                 print("Error in exps.py:")
                 print(exc)
-        return _sort_cmds(self._filter_commands(self.commands))
+        ready, done = self._filter_commands(self.commands)
+        return _sort_cmds(ready), done
 
     def _filter_commands(self, commands):
         '''Filters the commands to find only those that are ready to run'''
@@ -188,12 +188,12 @@ class Context:
         has_inputs = _filter_cmds_ready(needs_output, self.data_dir)
         if needs_output and not has_inputs:
             print("Commands exist without any way to acquire inputs:",
-                    needs_output)
+                  needs_output)
         fits_in_ram = _filter_cmds_ram(has_inputs,
-                                      reserved_ram_gb=self.reserved_ram_gb,
-                                      ram_gb_cap=self.ram_gb_cap)
+                                       reserved_ram_gb=self.reserved_ram_gb,
+                                       ram_gb_cap=self.ram_gb_cap)
         not_running = self._filter_cmds_running(fits_in_ram)
-        return not_running
+        return not_running, not bool(needs_output)
 
     def _filter_cmds_running(self, commands):
         '''Filters out running commands'''
@@ -210,6 +210,7 @@ class Context:
 
     def run_cmd(self, cmd):
         '''Sets temp files and starts a process for cmd'''
+        self.reserved_ram_gb += cmd.ram_gb
         cmd_dir = os.path.join(self.data_dir, "pipes", _cmd_name(cmd))
         os.makedirs(cmd_dir, exist_ok=True)
         stdout = open(os.path.join(cmd_dir, "stdout.txt"), "w")
@@ -246,6 +247,7 @@ class Context:
     def _process_completed(self, completed):
         '''Copy outputs from the tmp dir if the process exited successfully'''
         for (cmd, proc) in completed:
+            self.reserved_ram_gb -= cmd.ram_gb
             if proc.returncode != 0:
                 print(f"Error running {cmd}")
                 cmd_dir = os.path.join(self.data_dir, "pipes", _cmd_name(cmd))
@@ -264,7 +266,7 @@ class Context:
                             else:
                                 shutil.copy2(tmp, final)
                         except Exception as exc:
-                            if isinstance(exc, KeyBoardInterrupt):
+                            if isinstance(exc, KeyboardInterrupt):
                                 raise exc
                             print(f"Could not copy output {tmp} for command {cmd}")
 
