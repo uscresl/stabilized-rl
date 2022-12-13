@@ -4,6 +4,7 @@ import subprocess
 import psutil
 import time
 import shutil
+import math
 
 
 @dataclass(frozen=True)
@@ -113,6 +114,13 @@ def _cmd_name(cmd):
     return name
 
 
+def _run_process(args, *, ram_gb, stdout, stderr):
+    if shutil.which('srun'):
+        # srun is installed, use slurm
+        args = ['srun', f'--mem={int(math.ceil(ram_gb))}G', '--'] + args
+    return subprocess.Popen(args, stdout=stdout, stderr=stderr)
+
+
 @dataclass
 class Context:
 
@@ -217,7 +225,7 @@ class Context:
         stderr = open(os.path.join(cmd_dir, "stderr.txt"), "w")
         args = _cmd_to_args(cmd, self.data_dir)
         print(" ".join(args))
-        proc = subprocess.Popen(args, stdout=stdout, stderr=stderr)
+        proc = _run_process(args, stdout=stdout, stderr=stderr)
         print(proc.pid)
         self.warmup_deadline = time.monotonic() + cmd.warmup_time
         self.running.append((cmd, proc))
