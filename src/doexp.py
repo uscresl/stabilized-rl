@@ -30,6 +30,8 @@ class Cmd:
 
 
 _BYTES_PER_GB = (1024)**3
+# If srun is installed, use slurm
+_USING_SLURM = bool(shutil.which('srun'))
 
 
 def _ram_in_use_gb():
@@ -115,8 +117,7 @@ def _cmd_name(cmd):
 
 
 def _run_process(args, *, ram_gb, stdout, stderr):
-    if shutil.which('srun'):
-        # srun is installed, use slurm
+    if _USING_SLURM:
         args = ['srun', f'--mem={int(math.ceil(ram_gb))}G', '--'] + args
     return subprocess.Popen(args, stdout=stdout, stderr=stderr)
 
@@ -157,7 +158,8 @@ class Context:
             if self._ready() and ready_cmds:
                 self.run_cmd(ready_cmds[0])
                 done = False
-            self._terminate_if_oom()
+            if not _USING_SLURM:
+                self._terminate_if_oom()
             self.running, completed = _filter_completed(self.running)
             if self.running:
                 done = False
