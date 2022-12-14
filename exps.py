@@ -14,5 +14,28 @@ for seed in seeds:
                 f"--center-adv={center_adv}",
                 "--log-dir", Out(f"ppo/env={env}_seed={seed}_center-adv={center_adv}/"),
                 warmup_time=3,
-                ram_gb=16,
+                ram_gb=20,
             )
+        cmd(
+            "python",
+            "src/ppo_mujoco.py",
+            "--seed", seed,
+            "--env", env,
+            "--center-adv=True",
+            "--normalize-env",
+            "--log-dir", Out(f"ppo/env={env}_seed={seed}_normalized/"),
+            warmup_time=3,
+            ram_gb=20,
+        )
+        cmd(
+            "python",
+            "src/ppo_mujoco.py",
+            "--seed", seed,
+            "--env", env,
+            "--center-adv=True",
+            "--normalize-env",
+            "--use-vec-worker",
+            "--log-dir", Out(f"ppo/env={env}_seed={seed}_normalized_vecw/"),
+            warmup_time=3,
+            ram_gb=20,
+        )

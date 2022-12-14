@@ -2,9 +2,9 @@
 import torch
 
 from garage import wrap_experiment
-from garage.envs import GymEnv
+from garage.envs import GymEnv, normalize
 from garage.experiment.deterministic import set_seed
-from garage.sampler import LocalSampler
+from garage.sampler import LocalSampler, VecWorker, DefaultWorker
 from garage.torch.algos import PPO
 from garage.torch.policies import GaussianMLPPolicy
 from garage.torch.value_functions import GaussianMLPValueFunction
@@ -14,9 +14,11 @@ import clize
 
 
 @wrap_experiment(use_existing_dir=True)
-def ppo_mujoco(ctxt=None, *, seed, env, center_adv):
+def ppo_mujoco(ctxt=None, *, seed, env, center_adv, normalize_env=False, use_vec_worker=False):
     set_seed(seed)
     env = GymEnv(env)
+    if normalize_env:
+        env = normalize(env, normalize_obs=True, normalize_reward=True)
 
     trainer = Trainer(ctxt)
 
@@ -31,6 +33,7 @@ def ppo_mujoco(ctxt=None, *, seed, env, center_adv):
                                               output_nonlinearity=None)
 
     sampler = LocalSampler(agents=policy,
+                           worker_class=VecWorker if use_vec_worker else DefaultWorker,
                            envs=env,
                            max_episode_length=env.spec.max_episode_length)
 
@@ -47,5 +50,8 @@ def ppo_mujoco(ctxt=None, *, seed, env, center_adv):
 
 
 @clize.run
-def main(*, seed: int, env: str, log_dir: str, center_adv: bool=True):
-    ppo_mujoco(dict(log_dir=log_dir), seed=seed, env=env, center_adv=center_adv)
+def main(*, seed: int, env: str, log_dir: str, center_adv: bool=True,
+         normalize_env: bool=False, use_vec_worker: bool=False):
+    ppo_mujoco(dict(log_dir=log_dir), seed=seed, env=env,
+               center_adv=center_adv, normalize_env=normalize_env,
+               use_vec_worker=use_vec_worker)
