@@ -10,9 +10,9 @@ from garage.experiment.deterministic import get_seed
 from garage.np.algos import RLAlgorithm
 
 DEFAULT_GP_KERNEL = (
-    Matern(length_scale=0.1, nu=1.5, length_scale_bounds="fixed")
+    Matern(length_scale=0.3, nu=1.5, length_scale_bounds="fixed")
     + ConstantKernel()
-    + (WhiteKernel() * Matern(length_scale=0.1, nu=1.5, length_scale_bounds="fixed"))
+    + (WhiteKernel() * Matern(length_scale=0.3, nu=1.5, length_scale_bounds="fixed"))
 )
 # DEFAULT_GP_KERNEL = (Matern(length_scale=0.05, nu=1.5,
 # length_scale_bounds="fixed") +
@@ -202,7 +202,7 @@ class UCBBacktrackAlgo(RLAlgorithm):
         # plt.ylim((-5, 5))
         plt.xlim((X_START[hparam_idx], X_STOP[hparam_idx]))
         plt.scatter(
-            [vec[hparam_idx] for vec in self.hparam_vecs],
+            [vec[hparam_idx] * (X_STOP[hparam_idx] - X_START[hparam_idx]) + X_START[hparam_idx] for vec in self.hparam_vecs],
             self.perf_changes,
             label="Observations",
         )
