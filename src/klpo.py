@@ -147,9 +147,9 @@ class KLPO(VPG):
         if self._lr_clip_range is not None:
             hparam_ranges["lr_clip_range"] = (0.0, 1.0)
         if self._lr_loss_coeff is not None:
-            hparam_ranges["lr_loss_coeff"] = (0.0, 0.2)
+            hparam_ranges["lr_loss_coeff"] = (0.0, 50)
         if self._lr_sq_loss_coeff is not None:
-            hparam_ranges["lr_sq_loss_coeff"] = (0.0, 0.2)
+            hparam_ranges["lr_sq_loss_coeff"] = (0.0, 50)
         return hparam_ranges
 
     def get_hparams(self):
@@ -222,7 +222,7 @@ class KLPO(VPG):
         likelihood_ratio = (new_ll - old_ll).exp()
 
         if self._pg_loss_type == "kl_div":
-            kl_div = kl_divergence(new_dist.base_dist, old_dist.base_dist).flatten()
+            kl_div = kl_divergence(new_dist, old_dist)
             tabular.record("last_minibatch/kl_div_mean", kl_div.mean().item())
 
         # pg_loss = new_ll * advantages

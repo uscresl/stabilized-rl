@@ -1,13 +1,14 @@
+import os
 from collections import deque
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import Matern, WhiteKernel, ConstantKernel
-import numpy as np
-from matplotlib import pyplot as plt
-import cloudpickle
 
+import cloudpickle
+import numpy as np
 from dowel import logger, tabular
 from garage.experiment.deterministic import get_seed
 from garage.np.algos import RLAlgorithm
+from matplotlib import pyplot as plt
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import ConstantKernel, Matern, WhiteKernel
 
 DEFAULT_GP_KERNEL = (
     Matern(length_scale=0.3, nu=1.5, length_scale_bounds="fixed")
@@ -88,8 +89,8 @@ class UCBBacktrackAlgo(RLAlgorithm):
         saved_state = cloudpickle.dumps(self.inner_algo)
         if len(self.perf_changes) < self.min_epoch_window_size:
             hvec = np.random.uniform(
-                low=0.,
-                high=1.,
+                low=0.0,
+                high=1.0,
                 size=(self.n_hparams,),
             )
             hparams = self._vec_to_hparams(hvec)
@@ -119,7 +120,7 @@ class UCBBacktrackAlgo(RLAlgorithm):
             self.regressor.fit(self.hparam_vecs, perf_change_array)
             for index, (key, value) in enumerate(self.hparam_ranges.items()):
                 self.plot_gpr(
-                    f"{trainer.log_directory}/{key}_{epoch:05}.png",
+                    trainer.log_directory,
                     key,
                     index,
                     epoch,
@@ -148,8 +149,8 @@ class UCBBacktrackAlgo(RLAlgorithm):
 
     def _select_ucb_hparams(self, epoch):
         sampled_hparams = np.random.uniform(
-            low=0.,
-            high=1.,
+            low=0.0,
+            high=1.0,
             size=(self.n_hparam_ucb_samples, self.n_hparams),
         )
         pred_mu, pred_std = self.regressor.predict(sampled_hparams, return_std=True)
@@ -180,12 +181,12 @@ class UCBBacktrackAlgo(RLAlgorithm):
             last_statistics = self.step(trainer, epoch)
         return last_statistics
 
-    def plot_gpr(self, filename, hparam, hparam_idx, epoch, perf_array_scale):
+    def plot_gpr(self, dir, hparam, hparam_idx, epoch, perf_array_scale):
         N = 10000
         X_START = [x[0] for x in self.hparam_ranges.values()]
         X_STOP = [x[1] for x in self.hparam_ranges.values()]
         X_bel_plot = np.linspace(X_START, X_STOP, num=N)
-        X_bel = np.linspace([0.] * self.n_hparams, [1.] * self.n_hparams, num=N)
+        X_bel = np.linspace([0.0] * self.n_hparams, [1.0] * self.n_hparams, num=N)
         # sampled_hparams = np.random.uniform(size=(N, self.n_hparams))
         # sampled_hparams[:, hparam_idx] = X_bel
         mean_bel, std_bel = self.regressor.predict(X_bel, return_std=True)
@@ -202,7 +203,11 @@ class UCBBacktrackAlgo(RLAlgorithm):
         # plt.ylim((-5, 5))
         plt.xlim((X_START[hparam_idx], X_STOP[hparam_idx]))
         plt.scatter(
-            [vec[hparam_idx] * (X_STOP[hparam_idx] - X_START[hparam_idx]) + X_START[hparam_idx] for vec in self.hparam_vecs],
+            [
+                vec[hparam_idx] * (X_STOP[hparam_idx] - X_START[hparam_idx])
+                + X_START[hparam_idx]
+                for vec in self.hparam_vecs
+            ],
             self.perf_changes,
             label="Observations",
         )
@@ -224,4 +229,13 @@ class UCBBacktrackAlgo(RLAlgorithm):
         plt.legend()
         plt.xlabel(f"{hparam}")
         plt.ylabel("Perf. Improvement")
-        plt.savefig(filename)
+
+        plt.savefig(os.path.join(dir, f"{hparam}_{epoch:05}.png"))
+
+        plt.clf()
+        plt.xlim((X_START[hparam_idx], X_STOP[hparam_idx]))
+        plt.plot(X_bel_plot[:, hparam_idx], mean_bel, label="Mean prediction")
+        plt.legend()
+        plt.xlabel(f"{hparam}")
+        plt.ylabel("Perf. Improvement")
+        plt.savefig(os.path.join(dir, f"{hparam}_belief_{epoch:05}.png"))
