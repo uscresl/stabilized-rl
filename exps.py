@@ -1,5 +1,11 @@
 from doexp import cmd, In, Out, GLOBAL_CONTEXT
 import psutil
+from socket import gethostname
+
+HOST = gethostname()
+
+if HOST == 'brain.usc.edu':
+    GLOBAL_CONTEXT.max_concurrent_jobs = 8
 
 mujoco_envs = ['InvertedDoublePendulum-v2', 'HalfCheetah-v2', 'Hopper-v2', 'Walker2d-v2']
 seeds = [1111, 2222, 3333, 4444, 5555, 6666, 7777, 8888, 9999]
