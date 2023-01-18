@@ -45,3 +45,62 @@ for seed in seeds:
             warmup_time=3,
             ram_gb=20,
         )
+        cmd(
+            "python",
+            "src/klpo_mujoco.py",
+            "--seed", seed,
+            "--env", env,
+            "--log-dir", Out(f"klpo/env={env}_seed={seed}/"),
+            warmup_time=3,
+            ram_gb=20,
+        )
+        cmd(
+            "python",
+            "src/klpo_mujoco.py",
+            "--seed", seed,
+            "--env", env,
+            "--normalize-env",
+            "--log-dir", Out(f"klpo/env={env}_seed={seed}_normalized/"),
+            warmup_time=3,
+            ram_gb=20,
+        )
+        cmd(
+            "python",
+            "src/klpo_mujoco.py",
+            "--seed", seed,
+            "--env", env,
+            "--lr-loss-coeff=0.5", 
+            "--log-dir", Out(f"klpo/env={env}_seed={seed}_lr-loss-coeff=0.5/"),
+            warmup_time=3,
+            ram_gb=20,
+        )
+        cmd(
+            "python",
+            "src/klpo_mujoco.py",
+            "--seed", seed,
+            "--env", env,
+            "--lr-loss-coeff=0.05", 
+            "--log-dir", Out(f"klpo/env={env}_seed={seed}_lr-loss-coeff=0.05/"),
+            warmup_time=3,
+            ram_gb=20,
+        )
+        cmd(
+            "python",
+            "src/klpo_mujoco.py",
+            "--seed", seed,
+            "--env", env,
+            "--lr-loss-coeff=0.3", 
+            "--log-dir", Out(f"klpo/env={env}_seed={seed}_lr-loss-coeff=0.3/"),
+            warmup_time=3,
+            ram_gb=20,
+        )
+        cmd(
+            "python",
+            "src/klpo_mujoco.py",
+            "--seed", seed,
+            "--env", env,
+            "--lr-loss-coeff=0.7", 
+            "--log-dir", Out(f"klpo/env={env}_seed={seed}_lr-loss-coeff=0.7/"),
+            warmup_time=3,
+            ram_gb=20,
+        )
