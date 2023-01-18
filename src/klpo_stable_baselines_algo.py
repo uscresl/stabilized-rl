@@ -87,6 +87,7 @@ class KPLOStbl(PPO):
         clip_range: Union[float, Schedule] = 0.2,
         clip_range_vf: Union[None, float, Schedule] = None,
         normalize_advantage: bool = True,
+        normalize_batch_advantage: bool = True,
         lr_loss_coeff=0.5,
         lr_sq_loss_coeff=0.5,
         ent_coef: float = 0.0,
@@ -131,6 +132,7 @@ class KPLOStbl(PPO):
         self._lr_loss_coeff = lr_loss_coeff
         self._lr_sq_loss_coeff = lr_sq_loss_coeff
         self._old_policy = copy.deepcopy(self.policy)
+        self._normalize_batch_advantage = normalize_batch_advantage
 
     def train(self) -> None:
         """
@@ -151,12 +153,15 @@ class KPLOStbl(PPO):
         clip_fractions = []
 
         continue_training = True
-
+        self._log_avg_episode_returns()
         # train for n_epochs epochs
         for epoch in range(self.n_epochs):
             approx_kl_divs = []
             kl_divs = []
             # Do a complete pass on the rollout buffer
+            if self.normalize_advantage and self._normalize_batch_advantage:
+                batch_adv_mean = self.rollout_buffer.advantages.mean()
+                batch_adv_std = self.rollout_buffer.advantages.std()
             for rollout_data in self.rollout_buffer.get(self.batch_size):
                 actions = rollout_data.actions
                 if isinstance(self.action_space, spaces.Discrete):
@@ -181,9 +186,14 @@ class KPLOStbl(PPO):
                 advantages = rollout_data.advantages
                 # Normalization does not make sense if mini batchsize == 1, see GH issue #325
                 if self.normalize_advantage and len(advantages) > 1:
-                    advantages = (advantages - advantages.mean()) / (
-                        advantages.std() + 1e-8
-                    )
+                    if self._normalize_batch_advantage:
+                        advantages = (advantages - batch_adv_mean) / (
+                            batch_adv_std + 1e-8
+                        )
+                    else:
+                        advantages = (advantages - advantages.mean()) / (
+                            advantages.std() + 1e-8
+                        )
 
                 # ratio between old and new policy, should be one at the first iteration
                 ratio = th.exp(log_prob - rollout_data.old_log_prob)
@@ -193,7 +203,7 @@ class KPLOStbl(PPO):
                 )
                 kl_divs.append(kl_div.mean().item())
 
-                pg_loss = (-ratio * advantages).mean()
+                pg_loss = -(ratio * advantages).mean()
 
                 # Logging
                 pg_losses.append(pg_loss.item())
@@ -284,3 +294,14 @@ class KPLOStbl(PPO):
             reset_num_timesteps=reset_num_timesteps,
             progress_bar=progress_bar,
         )
+
+    def _log_avg_episode_returns(self):
+        eps_start_idx = np.where(self.rollout_buffer.episode_starts.flatten() == 1)[0]
+        returns = []
+
+        for i, start in enumerate(eps_start_idx[:-1]):  # only use full episodes
+            end_idx = eps_start_idx[i + 1]
+            returns.append(self.rollout_buffer.rewards[start:end_idx].sum())
+        avg_return = np.mean(returns)
+        self.logger.record("rollout/AverageReturn", avg_return)
+        self.logger.record("rollout/FullEpisodeCount", len(returns))

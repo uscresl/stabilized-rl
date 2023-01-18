@@ -8,7 +8,12 @@ import random
 
 @wrap_experiment(name_parameters="all", prefix="experiment/stbl")
 def kpo_stbl(
-    ctxt=None, env="HalfCheetah-v3", lr_loss_coeff=0.5, lr_sq_loss_coeff=0.5, seed=1
+    ctxt=None,
+    env="HalfCheetah-v3",
+    normalize_batch_advantage=True,
+    lr_loss_coeff=0.5,
+    lr_sq_loss_coeff=0,
+    seed=1,
 ):
     model = KPLOStbl(
         "MlpPolicy",
@@ -16,16 +21,17 @@ def kpo_stbl(
         lr_loss_coeff=lr_loss_coeff,
         lr_sq_loss_coeff=lr_sq_loss_coeff,
         seed=seed,
+        normalize_batch_advantage=normalize_batch_advantage,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
     model.set_logger(new_logger)
-    model.learn(10_000_000)
+    model.learn(3_000_000)
 
 
 if __name__ == "__main__":
     ppo_env_names = [
-        # "HalfCheetah-v3",
+        "HalfCheetah-v3",
         "Walker2d-v3",
         "Hopper-v3",
         "Swimmer-v3",
@@ -34,5 +40,10 @@ if __name__ == "__main__":
     ]
     for _ in range(5):
         for env_name in ppo_env_names:
-            seed = random.randrange(1000)
-            kpo_stbl(env=env_name, seed=seed)
+            for normalize_batch_advantage in [True, False]:
+                seed = random.randrange(1000)
+                kpo_stbl(
+                    env=env_name,
+                    seed=seed,
+                    normalize_batch_advantage=normalize_batch_advantage,
+                )
