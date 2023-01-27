@@ -22,7 +22,7 @@ from torch.nn import functional as F
 SelfPPO = TypeVar("SelfPPO", bound="PPO")
 
 
-class KPLOStbl(PPO):
+class KLPOStbl(PPO):
     """
     KLPO Algo
 
@@ -101,6 +101,7 @@ class KPLOStbl(PPO):
         verbose: int = 0,
         seed: Optional[int] = None,
         device: Union[th.device, str] = "auto",
+        clip_grad_norm=True,
         _init_setup_model: bool = True,
     ):
 
@@ -133,6 +134,7 @@ class KPLOStbl(PPO):
         self._lr_sq_loss_coeff = lr_sq_loss_coeff
         self._old_policy = copy.deepcopy(self.policy)
         self._normalize_batch_advantage = normalize_batch_advantage
+        self._clip_grad_norm = clip_grad_norm
 
     def train(self) -> None:
         """
@@ -162,6 +164,8 @@ class KPLOStbl(PPO):
             if self.normalize_advantage and self._normalize_batch_advantage:
                 batch_adv_mean = self.rollout_buffer.advantages.mean()
                 batch_adv_std = self.rollout_buffer.advantages.std()
+            # Save the current policy state and train
+            self._old_policy.load_state_dict(self.policy.state_dict())
             for rollout_data in self.rollout_buffer.get(self.batch_size):
                 actions = rollout_data.actions
                 if isinstance(self.action_space, spaces.Discrete):
@@ -198,12 +202,12 @@ class KPLOStbl(PPO):
                 # ratio between old and new policy, should be one at the first iteration
                 ratio = th.exp(log_prob - rollout_data.old_log_prob)
                 kl_div = kl_divergence(
-                    Independent(old_dist.distribution, 1),
                     Independent(new_dist.distribution, 1),
+                    Independent(old_dist.distribution, 1),
                 )
                 kl_divs.append(kl_div.mean().item())
 
-                pg_loss = -(ratio * advantages).mean()
+                pg_loss = -(advantages * ratio).mean()
 
                 # Logging
                 pg_losses.append(pg_loss.item())
@@ -240,15 +244,14 @@ class KPLOStbl(PPO):
                 if self._lr_sq_loss_coeff is not None:
                     loss += (self._lr_sq_loss_coeff * (kl_div**2)).mean()
 
-                # Save the current policy state and train
-                self._old_policy.load_state_dict(self.policy.state_dict())
                 # Optimization step
                 self.policy.optimizer.zero_grad()
                 loss.backward()
                 # Clip grad norm
-                th.nn.utils.clip_grad_norm_(
-                    self.policy.parameters(), self.max_grad_norm
-                )
+                if self._clip_grad_norm:
+                    th.nn.utils.clip_grad_norm_(
+                        self.policy.parameters(), self.max_grad_norm
+                    )
                 self.policy.optimizer.step()
 
             if not continue_training:
