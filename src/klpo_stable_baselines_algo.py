@@ -20,6 +20,8 @@ from torch.distributions.independent import Independent
 from torch.distributions import kl_divergence
 from torch.nn import functional as F
 
+MIN_KL_LOSS_COEFF = 1e-2
+
 
 class KLPOStbl(OnPolicyAlgorithm):
     """
@@ -126,7 +128,6 @@ class KLPOStbl(OnPolicyAlgorithm):
             policy_kwargs=policy_kwargs,
             verbose=verbose,
             device=device,
-            create_eval_env=False,
             seed=seed,
             _init_setup_model=False,
             supported_action_spaces=(
@@ -164,7 +165,6 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.clip_range = clip_range
         self.clip_range_vf = clip_range_vf
         self.normalize_advantage = normalize_advantage
-        self.target_kl = target_kl
 
         if _init_setup_model:
             self._setup_model()
@@ -174,6 +174,11 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._old_policy = copy.deepcopy(self.policy)
         self._normalize_batch_advantage = normalize_batch_advantage
         self._clip_grad_norm = clip_grad_norm
+
+        self.target_kl = target_kl
+
+        self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
+        self._kl_loss_coeff_opt = th.optim.Adam([self._kl_loss_coeff_param])
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -294,10 +299,17 @@ class KLPOStbl(OnPolicyAlgorithm):
                 loss = (
                     pg_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
                 )
-                if self._lr_loss_coeff is not None:
+                if self._lr_loss_coeff:
                     loss += (self._lr_loss_coeff * kl_div).mean()
-                if self._lr_sq_loss_coeff is not None:
+                if self._lr_sq_loss_coeff:
                     loss += (self._lr_sq_loss_coeff * (kl_div**2)).mean()
+                if self.target_kl is not None:
+                    mean_kl_div = kl_div.mean()
+                    loss += self._kl_loss_coeff_param.detach() * mean_kl_div
+                    loss += self._kl_loss_coeff_param * (
+                        self.target_kl - mean_kl_div.detach()
+                    )
+                    self._kl_loss_coeff_opt.zero_grad()
 
                 # Optimization step
                 self.policy.optimizer.zero_grad()
@@ -308,6 +320,12 @@ class KLPOStbl(OnPolicyAlgorithm):
                         self.policy.parameters(), self.max_grad_norm
                     )
                 self.policy.optimizer.step()
+                if self.target_kl is not None:
+                    self._kl_loss_coeff_opt.step()
+                    if self._kl_loss_coeff_param < MIN_KL_LOSS_COEFF:
+                        with th.no_grad():
+                            self._kl_loss_coeff_param.copy_(MIN_KL_LOSS_COEFF)
+                        assert self._kl_loss_coeff_param >= MIN_KL_LOSS_COEFF
 
             if not continue_training:
                 break
@@ -330,6 +348,7 @@ class KLPOStbl(OnPolicyAlgorithm):
 
         self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
         self.logger.record("train/clip_range", clip_range)
+        self.logger.record("train/kl_loss_coeff", self._kl_loss_coeff_param.item())
 
     def learn(
         self,
