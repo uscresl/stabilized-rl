@@ -19,7 +19,7 @@ def klpo_stbl(
     clip_grad_norm=False,
     total_steps=3_000_000,
     seed=1,
-    note="fixed_old_policy_update",
+    note="buffer_kl_loss",
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -51,18 +51,16 @@ if __name__ == "__main__":
     # ppo_env_names = [
     #     "HalfCheetah-v3",
     # ]
-    lr_loss_coeffs = [0.7, 1, 1.5, 2, 4, 5, 10]
+    lr_loss_coeffs = [1, 1.5, 2, 7]
     for _ in range(5):
-        for env_name in ppo_env_names:
-            for loss_coeff in lr_loss_coeffs:
-                for clip_grad in [True, False]:
-                    for normalize_batch_advantage in [True, False]:
-                        seed = random.randrange(1000)
-                        klpo_stbl(
-                            env=env_name,
-                            lr_loss_coeff=loss_coeff,
-                            seed=seed,
-                            normalize_batch_advantage=normalize_batch_advantage,
-                            clip_grad_norm=clip_grad,
-                            total_steps=2_000_000,
-                        )
+        seed = random.randrange(1000)
+        for loss_coeff in lr_loss_coeffs:
+            for env_name in ppo_env_names:
+                klpo_stbl(
+                    env=env_name,
+                    lr_loss_coeff=loss_coeff,
+                    seed=seed,
+                    normalize_batch_advantage=True,
+                    clip_grad_norm=True,
+                    total_steps=2_000_000,
+                )

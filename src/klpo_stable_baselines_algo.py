@@ -5,7 +5,6 @@ from typing import Any, Dict, Optional, Type, TypeVar, Union
 import numpy as np
 import torch as th
 from gym import spaces
-from stable_baselines3 import PPO
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.policies import (
     ActorCriticCnnPolicy,
@@ -13,16 +12,16 @@ from stable_baselines3.common.policies import (
     BasePolicy,
     MultiInputActorCriticPolicy,
 )
+from stable_baselines3.common.buffers import RolloutBuffer
+
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 from torch.distributions.independent import Independent
 from torch.distributions import kl_divergence
 from torch.nn import functional as F
 
-SelfPPO = TypeVar("SelfPPO", bound="PPO")
 
-
-class KLPOStbl(PPO):
+class KLPOStbl(OnPolicyAlgorithm):
     """
     KLPO Algo
 
@@ -74,6 +73,12 @@ class KLPOStbl(PPO):
     :param _init_setup_model: Whether or not to build the network at the creation of the instance
     """
 
+    policy_aliases: Dict[str, Type[BasePolicy]] = {
+        "MlpPolicy": ActorCriticPolicy,
+        "CnnPolicy": ActorCriticCnnPolicy,
+        "MultiInputPolicy": MultiInputActorCriticPolicy,
+    }
+
     def __init__(
         self,
         policy: Union[str, Type[ActorCriticPolicy]],
@@ -110,31 +115,81 @@ class KLPOStbl(PPO):
             env,
             learning_rate=learning_rate,
             n_steps=n_steps,
-            batch_size=batch_size,
-            n_epochs=n_epochs,
             gamma=gamma,
             gae_lambda=gae_lambda,
-            clip_range=clip_range,
-            clip_range_vf=clip_range_vf,
-            normalize_advantage=normalize_advantage,
             ent_coef=ent_coef,
             vf_coef=vf_coef,
             max_grad_norm=max_grad_norm,
             use_sde=use_sde,
             sde_sample_freq=sde_sample_freq,
-            target_kl=target_kl,
             tensorboard_log=tensorboard_log,
             policy_kwargs=policy_kwargs,
             verbose=verbose,
             device=device,
+            create_eval_env=False,
             seed=seed,
-            _init_setup_model=True,
+            _init_setup_model=False,
+            supported_action_spaces=(
+                spaces.Box,
+                spaces.Discrete,
+                spaces.MultiDiscrete,
+                spaces.MultiBinary,
+            ),
         )
+        if normalize_advantage:
+            assert (
+                batch_size > 1
+            ), "`batch_size` must be greater than 1. See https://github.com/DLR-RM/stable-baselines3/issues/440"
+
+        if self.env is not None:
+            # Check that `n_steps * n_envs > 1` to avoid NaN
+            # when doing advantage normalization
+            buffer_size = self.env.num_envs * self.n_steps
+            assert buffer_size > 1 or (
+                not normalize_advantage
+            ), f"`n_steps * n_envs` must be greater than 1. Currently n_steps={self.n_steps} and n_envs={self.env.num_envs}"
+            # Check that the rollout buffer size is a multiple of the mini-batch size
+            untruncated_batches = buffer_size // batch_size
+            if buffer_size % batch_size > 0:
+                warnings.warn(
+                    f"You have specified a mini-batch size of {batch_size},"
+                    f" but because the `RolloutBuffer` is of size `n_steps * n_envs = {buffer_size}`,"
+                    f" after every {untruncated_batches} untruncated mini-batches,"
+                    f" there will be a truncated mini-batch of size {buffer_size % batch_size}\n"
+                    f"We recommend using a `batch_size` that is a factor of `n_steps * n_envs`.\n"
+                    f"Info: (n_steps={self.n_steps} and n_envs={self.env.num_envs})"
+                )
+        self.batch_size = batch_size
+        self.n_epochs = n_epochs
+        self.clip_range = clip_range
+        self.clip_range_vf = clip_range_vf
+        self.normalize_advantage = normalize_advantage
+        self.target_kl = target_kl
+
+        if _init_setup_model:
+            self._setup_model()
+
         self._lr_loss_coeff = lr_loss_coeff
         self._lr_sq_loss_coeff = lr_sq_loss_coeff
         self._old_policy = copy.deepcopy(self.policy)
         self._normalize_batch_advantage = normalize_batch_advantage
         self._clip_grad_norm = clip_grad_norm
+
+    def _setup_model(self) -> None:
+        super()._setup_model()
+
+        # Initialize schedules for policy/value clipping
+        self.clip_range = get_schedule_fn(self.clip_range)
+        self.historic_buffer = RolloutBuffer(
+            self.n_steps * 10,
+            self.observation_space,
+            self.action_space,
+            device=self.device,
+            gamma=self.gamma,
+            gae_lambda=self.gae_lambda,
+            n_envs=self.n_envs,
+        )
+        self.historic_buffer.reset()  # initialize the arrays
 
     def train(self) -> None:
         """
@@ -147,8 +202,6 @@ class KLPOStbl(PPO):
         # Compute current clip range
         clip_range = self.clip_range(self._current_progress_remaining)
         # Optional: clip range for the value function
-        if self.clip_range_vf is not None:
-            clip_range_vf = self.clip_range_vf(self._current_progress_remaining)
 
         entropy_losses = []
         pg_losses, value_losses = [], []
@@ -156,9 +209,18 @@ class KLPOStbl(PPO):
 
         continue_training = True
         self._log_avg_episode_returns()
+
+        self._copy_over_to_history_buffer()
+
+        if self.historic_buffer.full:
+            max_idx = self.historic_buffer.buffer_size
+        else:
+            max_idx = self.historic_buffer.pos
+        historic_obs = self.historic_buffer.observations[:max_idx].copy()
+        historic_obs = self.historic_buffer.swap_and_flatten(historic_obs)
+        historic_obs = self.historic_buffer.to_torch(historic_obs)
         # train for n_epochs epochs
         for epoch in range(self.n_epochs):
-            approx_kl_divs = []
             kl_divs = []
             # Do a complete pass on the rollout buffer
             if self.normalize_advantage and self._normalize_batch_advantage:
@@ -178,9 +240,10 @@ class KLPOStbl(PPO):
 
                 with th.no_grad():
                     old_dist = self._old_policy.get_distribution(
-                        rollout_data.observations
-                    )
-                new_dist = self.policy.get_distribution(rollout_data.observations)
+                        historic_obs
+                    ).distribution
+
+                new_dist = self.policy.get_distribution(historic_obs).distribution
 
                 values, log_prob, entropy = self.policy.evaluate_actions(
                     rollout_data.observations, actions
@@ -202,8 +265,8 @@ class KLPOStbl(PPO):
                 # ratio between old and new policy, should be one at the first iteration
                 ratio = th.exp(log_prob - rollout_data.old_log_prob)
                 kl_div = kl_divergence(
-                    Independent(new_dist.distribution, 1),
-                    Independent(old_dist.distribution, 1),
+                    Independent(new_dist, 1),
+                    Independent(old_dist, 1),
                 )
                 kl_divs.append(kl_div.mean().item())
 
@@ -214,15 +277,7 @@ class KLPOStbl(PPO):
                 clip_fraction = th.mean((th.abs(ratio - 1) > clip_range).float()).item()
                 clip_fractions.append(clip_fraction)
 
-                if self.clip_range_vf is None:
-                    # No clipping
-                    values_pred = values
-                else:
-                    # Clip the difference between old and new value
-                    # NOTE: this depends on the reward scaling
-                    values_pred = rollout_data.old_values + th.clamp(
-                        values - rollout_data.old_values, -clip_range_vf, clip_range_vf
-                    )
+                values_pred = values
                 # Value loss using the TD(gae_lambda) target
                 value_loss = F.mse_loss(rollout_data.returns, values_pred)
                 value_losses.append(value_loss.item())
@@ -266,7 +321,6 @@ class KLPOStbl(PPO):
         self.logger.record("train/entropy_loss", np.mean(entropy_losses))
         self.logger.record("train/policy_gradient_loss", np.mean(pg_losses))
         self.logger.record("train/value_loss", np.mean(value_losses))
-        self.logger.record("train/approx_kl", np.mean(approx_kl_divs))
         self.logger.record("train/kl_div", np.mean(kl_divs))
         self.logger.record("train/clip_fraction", np.mean(clip_fractions))
         self.logger.record("train/loss", loss.item())
@@ -276,18 +330,16 @@ class KLPOStbl(PPO):
 
         self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
         self.logger.record("train/clip_range", clip_range)
-        if self.clip_range_vf is not None:
-            self.logger.record("train/clip_range_vf", clip_range_vf)
 
     def learn(
-        self: SelfPPO,
+        self,
         total_timesteps: int,
         callback: MaybeCallback = None,
         log_interval: int = 1,
         tb_log_name: str = "KLPO",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
-    ) -> SelfPPO:
+    ):
 
         return super().learn(
             total_timesteps=total_timesteps,
@@ -308,3 +360,40 @@ class KLPOStbl(PPO):
         avg_return = np.mean(returns)
         self.logger.record("rollout/AverageReturn", avg_return)
         self.logger.record("rollout/FullEpisodeCount", len(returns))
+
+    def _copy_over_to_history_buffer(self):
+        vars_to_copy = [
+            "observations",
+            "actions",
+            "rewards",
+            "episode_starts",
+            "values",
+            "log_probs",
+        ]
+
+        buffer_len = self.rollout_buffer.pos
+        remaining_space = self.historic_buffer.buffer_size - self.historic_buffer.pos
+
+        if remaining_space <= buffer_len:
+            for var in vars_to_copy:
+                self.historic_buffer.__getattribute__(var)[
+                    self.historic_buffer.pos : self.historic_buffer.pos
+                    + remaining_space
+                ] = self.rollout_buffer.__getattribute__(var)[:remaining_space]
+
+            # Overwrite the remaining from the start
+            for var in vars_to_copy:
+                self.historic_buffer.__getattribute__(var)[
+                    0 : (buffer_len - remaining_space)
+                ] = self.rollout_buffer.__getattribute__(var)[remaining_space:].copy()
+
+            self.historic_buffer.pos = buffer_len - remaining_space
+            self.historic_buffer.full = True
+        else:
+            for var in vars_to_copy:
+                self.historic_buffer.__getattribute__(var)[
+                    self.historic_buffer.pos : (self.historic_buffer.pos + buffer_len)
+                ] = self.rollout_buffer.__getattribute__(var)[:].copy()
+            self.historic_buffer.pos = (
+                self.historic_buffer.pos + buffer_len
+            ) % self.historic_buffer.buffer_size
