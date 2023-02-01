@@ -45,6 +45,7 @@ ppo_env_names_v3 = [
 
 for seed in seeds:
     target_kl = 0.2
+    ent_coef = 0.1
     for env in mujoco_envs:
         cmd(
             "python",
@@ -60,6 +61,27 @@ for seed in seeds:
             "--log-dir",
             Out(
                 f"klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_note=learned-kl-loss/"
+            ),
+            warmup_time=3,
+            ram_gb=20,
+            priority=-10,
+        )
+        cmd(
+            "python",
+            "src/klpo_stbl_mujoco.py",
+            "--seed",
+            seed,
+            "--env",
+            env,
+            "--note",
+            "learned-kl-loss",
+            "--target-kl",
+            target_kl,
+            "--ent-coef",
+            ent_coef,
+            "--log-dir",
+            Out(
+                f"klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_ent-coef={ent_coef}_note=learned-kl-loss/"
             ),
             warmup_time=3,
             ram_gb=20,
