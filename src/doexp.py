@@ -29,9 +29,9 @@ class Cmd:
     gpus: str or None = None
 
 
-_BYTES_PER_GB = (1024)**3
+_BYTES_PER_GB = (1024) ** 3
 # If srun is installed, use slurm
-_USING_SLURM = bool(shutil.which('srun'))
+_USING_SLURM = bool(shutil.which("srun"))
 
 
 def _ram_in_use_gb():
@@ -74,10 +74,10 @@ def _filter_cmds_ram(commands, *, reserved_ram_gb, ram_gb_cap):
 
 def _sort_cmds(commands):
     def key(cmd):
-        return (-cmd.priority,
-                cmd.warmup_time,
-                cmd.ram_gb)
+        return (-cmd.priority, cmd.warmup_time, cmd.ram_gb)
+
     return sorted(list(commands), key=key)
+
 
 def _cmd_to_args(cmd, data_dir):
     args = []
@@ -112,13 +112,13 @@ def _cmd_name(cmd):
             args.append(str(arg))
     name = " ".join(args).replace("/", ":")
     if len(name) > 200:
-      name = name[:200]
+        name = name[:200]
     return name
 
 
 def _run_process(args, *, ram_gb, stdout, stderr):
     if _USING_SLURM:
-        args = ['srun', f'--mem={int(math.ceil(ram_gb))}G', '--'] + args
+        args = ["srun", f"--mem={int(math.ceil(ram_gb))}G", "--"] + args
     return subprocess.Popen(args, stdout=stdout, stderr=stderr)
 
 
@@ -136,8 +136,11 @@ class Context:
 
     @property
     def ram_gb_cap(self):
-        return (self._vm_percent_cap * psutil.virtual_memory().total /
-                (100.0 * _BYTES_PER_GB))
+        return (
+            self._vm_percent_cap
+            * psutil.virtual_memory().total
+            / (100.0 * _BYTES_PER_GB)
+        )
 
     @property
     def vm_percent_cap(self):
@@ -151,7 +154,7 @@ class Context:
         self.commands.add(command)
 
     def run_all(self, filename="exps.py"):
-        '''Runs all commands listed in the file.'''
+        """Runs all commands listed in the file."""
         done = False
         while not done:
             ready_cmds, done = self._refresh_commands(filename)
@@ -169,16 +172,18 @@ class Context:
             self._process_completed(completed)
 
     def _ready(self):
-        '''Checks global readiness conditions.'''
-        if (self.max_concurrent_jobs is not None and
-                len(self.running) >= self.max_concurrent_jobs):
+        """Checks global readiness conditions."""
+        if (
+            self.max_concurrent_jobs is not None
+            and len(self.running) >= self.max_concurrent_jobs
+        ):
             return False
         if time.monotonic() < self.warmup_deadline:
             return False
         return True
 
     def _refresh_commands(self, filename):
-        '''Reloads, filters, and sorts the commands'''
+        """Reloads, filters, and sorts the commands"""
         self.commands = set()
         try:
             with open(filename) as f:
@@ -193,23 +198,24 @@ class Context:
         return _sort_cmds(ready), done
 
     def _filter_commands(self, commands):
-        '''Filters the commands to find only those that are ready to run'''
+        """Filters the commands to find only those that are ready to run"""
         needs_output = _filter_cmds_remaining(commands, self.data_dir)
         has_inputs = _filter_cmds_ready(needs_output, self.data_dir)
         if needs_output and not has_inputs:
-            print("Commands exist without any way to acquire inputs:",
-                  needs_output)
+            print("Commands exist without any way to acquire inputs:", needs_output)
         if _USING_SLURM:
             fits_in_ram = has_inputs
         else:
             fits_in_ram = _filter_cmds_ram(
-                    has_inputs, reserved_ram_gb=self.reserved_ram_gb,
-                    ram_gb_cap=self.ram_gb_cap)
+                has_inputs,
+                reserved_ram_gb=self.reserved_ram_gb,
+                ram_gb_cap=self.ram_gb_cap,
+            )
         not_running = self._filter_cmds_running(fits_in_ram)
         return not_running, not bool(needs_output)
 
     def _filter_cmds_running(self, commands):
-        '''Filters out running commands'''
+        """Filters out running commands"""
         out_commands = set()
         for cmd in commands:
             running = False
@@ -222,7 +228,7 @@ class Context:
         return out_commands
 
     def run_cmd(self, cmd):
-        '''Sets temp files and starts a process for cmd'''
+        """Sets temp files and starts a process for cmd"""
         self.reserved_ram_gb += cmd.ram_gb
         cmd_dir = os.path.join(self.data_dir, "pipes", _cmd_name(cmd))
         os.makedirs(cmd_dir, exist_ok=True)
@@ -237,28 +243,39 @@ class Context:
         return proc
 
     def _terminate_if_oom(self):
-        '''Terminates processes if over ram cap'''
+        """Terminates processes if over ram cap"""
         gb_free = self.ram_gb_cap - _ram_in_use_gb()
+
         def total_time(cmd_proc):
             cmd, proc = cmd_proc
             times = psutil.Process(proc.pid).cpu_times()
-            return (times.user + times.system + times.children_user
-                    + times.children_system)
+            return (
+                times.user + times.system + times.children_user + times.children_system
+            )
+
         by_total_time = sorted(self.running, key=total_time)
         for (running_cmd, proc) in by_total_time:
-            mem = psutil.Process(proc.pid).memory_info()
-            ram_gb = (mem.rss + mem.vms) / _BYTES_PER_GB
+            try:
+                mem = psutil.Process(proc.pid).memory_full_info()
+            except psutil.ZombieProcess:
+                continue
+            ram_gb = (mem.pss + mem.uss) / _BYTES_PER_GB
             if ram_gb > running_cmd.ram_gb:
-                print(f"Command exceeded memory limit "
-                      f"({ram_gb} > {running_cmd.ram_gb}): "
-                      f"{_cmd_name(running_cmd)}")
+                print(
+                    f"Command exceeded memory limit "
+                    f"({ram_gb} > {running_cmd.ram_gb}): "
+                    f"{_cmd_name(running_cmd)}"
+                )
+                self.reserved_ram_gb -= running_cmd.ram_gb
+                running_cmd.ram_gb = ram_gb
+                self.reserved_ram_gb += running_cmd.ram_gb
             if gb_free < 0:
                 print(f"Terminating process: {_cmd_name(running_cmd)}")
                 proc.terminate()
                 gb_free += ram_gb
 
     def _process_completed(self, completed):
-        '''Copy outputs from the tmp dir if the process exited successfully'''
+        """Copy outputs from the tmp dir if the process exited successfully"""
         for (cmd, proc) in completed:
             self.reserved_ram_gb -= cmd.ram_gb
             if proc.returncode != 0:
@@ -287,10 +304,16 @@ class Context:
 GLOBAL_CONTEXT = Context()
 
 
-def cmd(*args, extra_outputs=tuple(), extra_inputs=tuple(),
-        warmup_time: float = 1.0, ram_gb: float = 4, priority: int = 10,
-        gpus: str or None = None):
-    '''Add a command to be run by the GLOBAL_CONTEXT'''
+def cmd(
+    *args,
+    extra_outputs=tuple(),
+    extra_inputs=tuple(),
+    warmup_time: float = 1.0,
+    ram_gb: float = 4,
+    priority: int = 10,
+    gpus: str or None = None,
+):
+    """Add a command to be run by the GLOBAL_CONTEXT"""
     GLOBAL_CONTEXT.cmd(
         Cmd(
             args=tuple(args),
@@ -302,3 +325,7 @@ def cmd(*args, extra_outputs=tuple(), extra_inputs=tuple(),
             gpus=gpus,
         )
     )
+
+
+if __name__ == "__main__":
+    print("Run src/runexp.py instead")

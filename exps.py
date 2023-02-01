@@ -2,6 +2,10 @@ from doexp import cmd, In, Out, GLOBAL_CONTEXT
 from socket import gethostname
 import random
 import plot_all_csvs
+import sys
+
+# Uncomment to stop starting new runs
+# sys.exit(1)
 
 HOST = gethostname()
 
@@ -45,10 +49,11 @@ ppo_env_names_v3 = [
 ]
 
 if HOST == "resl34":
-    GLOBAL_CONTEXT.max_concurrent_jobs = 16
+    GLOBAL_CONTEXT.max_concurrent_jobs = 10
 
 for seed in seeds:
     target_kl = 0.2
+    ram_gb = 4
     for env in mujoco_envs:
         cmd(
             "python",
@@ -66,10 +71,10 @@ for seed in seeds:
                 f"klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_note=learned-kl-loss/"
             ),
             warmup_time=3,
-            ram_gb=20,
+            ram_gb=ram_gb,
             priority=10,
         )
-        for ent_coef in [0.01, 0.1]:
+        for ent_coef in [0.01, 0.001]:
             cmd(
                 "python",
                 "src/klpo_stbl_mujoco.py",
@@ -88,7 +93,7 @@ for seed in seeds:
                     f"klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_ent-coef={ent_coef}_note=learned-kl-loss/"
                 ),
                 warmup_time=3,
-                ram_gb=20,
+                ram_gb=ram_gb,
                 priority=11,
             )
 
@@ -111,9 +116,31 @@ for seed in seeds:
                 f"klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-loss-coeff={kl_loss_coeff_lr}_note=learned-kl-loss/"
             ),
             warmup_time=3,
-            ram_gb=20,
+            ram_gb=ram_gb,
             priority=20,
         )
+        kl_target_stat = "max"
+        cmd(
+            "python",
+            "src/klpo_stbl_mujoco.py",
+            "--seed",
+            seed,
+            "--env",
+            env,
+            "--note",
+            "learned-kl-loss",
+            "--target-kl",
+            target_kl,
+            "--kl-target-stat",
+            kl_target_stat,
+            "--log-dir",
+            Out(
+                f"klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-target-stat={kl_target_stat}_note=learned-kl-loss/"
+            ),
+            warmup_time=3,
+            ram_gb=ram_gb,
+            priority=21,
+        )
 
-if random.randrange(100) == 0:
-    plot_all_csvs.main()
+# if random.randrange(100) == 0:
+# plot_all_csvs.main()
