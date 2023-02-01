@@ -110,6 +110,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         device: Union[th.device, str] = "auto",
         clip_grad_norm=True,
         _init_setup_model: bool = True,
+        *,
+        kl_loss_coeff_lr,
     ):
 
         super().__init__(
@@ -178,7 +180,9 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.target_kl = target_kl
 
         self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
-        self._kl_loss_coeff_opt = th.optim.Adam([self._kl_loss_coeff_param])
+        self._kl_loss_coeff_opt = th.optim.SGD(
+            [self._kl_loss_coeff_param], lr=kl_loss_coeff_lr
+        )
 
     def _setup_model(self) -> None:
         super()._setup_model()

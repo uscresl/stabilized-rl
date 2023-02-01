@@ -1,6 +1,9 @@
 import clize
 
 from garage import wrap_experiment
+from torch.distributions.kl import (
+    _kl_lowrankmultivariatenormal_lowrankmultivariatenormal,
+)
 from klpo_stable_baselines_algo import KLPOStbl
 from stable_baselines3.common.logger import configure
 import random
@@ -23,6 +26,7 @@ def klpo_stbl(
     seed,
     target_kl,
     ent_coef,
+    kl_loss_coeff_lr,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -37,6 +41,7 @@ def klpo_stbl(
         clip_grad_norm=clip_grad_norm,
         target_kl=target_kl,
         ent_coef=ent_coef,
+        kl_loss_coeff_lr=kl_loss_coeff_lr,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -55,6 +60,7 @@ if __name__ == "__main__":
         target_kl: float,
         note: str,
         ent_coef: float = 0.0,
+        kl_loss_coeff_lr: float = 1e-3,
     ):
         klpo_stbl(
             dict(log_dir=log_dir),
@@ -63,6 +69,7 @@ if __name__ == "__main__":
             target_kl=target_kl,
             note=note,
             ent_coef=ent_coef,
+            kl_loss_coeff_lr=kl_loss_coeff_lr,
         )
 
     # ppo_env_names = [
