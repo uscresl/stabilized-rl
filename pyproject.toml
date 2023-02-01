@@ -27,6 +27,7 @@ mujoco-py = "^2.1.2"
 scikit-learn = "^1.1.2"
 tqdm = "^4.64.1"
 gym = "^0.21"
+cliport = {path = "cliport"}
 
 [tool.poetry.dev-dependencies]
 tensorboard = "^2.6.0"
