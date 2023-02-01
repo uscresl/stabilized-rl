@@ -23,7 +23,10 @@ def main(data_dir: str = "data", out_file_base: str = "data/plots"):
 
 
 def plot_csvs(exp_type: str, experiments: dict[int, str], out_file_base: str):
-    data = {seed: pl.read_csv(filepath) for seed, filepath in experiments.items()}
+    data = {
+        seed: pl.read_csv(filepath, ignore_errors=True)
+        for seed, filepath in experiments.items()
+    }
     columns = next(iter(data.values())).columns
     x_axis = "train/total_timesteps"
     if x_axis not in columns:

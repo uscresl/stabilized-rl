@@ -685,11 +685,11 @@ torch = ">=1.0.0,<1.5.0 || >1.5.0"
 torchvision = ">=0.2.1"
 
 [package.extras]
-all = ["atari-py (<0.2.7)", "dm-control", "gym[box2d,atari,classic_control] (==0.17.2)", "imageio", "mpi4py", "mujoco-py (>=2.0,<2.2)", "pybullet (>=2.8.7)", "ray", "tensorflow (>=2.4,!=2.5.0)", "tensorflow-probability (>=0.11.0,<=0.12.2)"]
+all = ["atari-py (<0.2.7)", "dm-control", "gym[box2d,classic_control,atari] (==0.17.2)", "imageio", "mpi4py", "mujoco-py (>=2.0,<2.2)", "pybullet (>=2.8.7)", "ray", "tensorflow (>=2.4,!=2.5.0)", "tensorflow-probability (>=0.11.0,<=0.12.2)"]
 bullet = ["mpi4py", "pybullet (>=2.8.7)"]
 dev = ["flake8", "flake8-docstrings (>=1.5.0)", "flake8-import-order", "isort (>=4.3.21,<5.0.0)", "metaworld", "pep8-naming (==0.7.0)", "pre-commit", "pycodestyle (>=2.5.0)", "pydocstyle (>=4.0.0)", "pylint (>=2.5.3)", "pytest-cov", "pytest-rerunfailures", "pytest-timeout", "pytest-xdist", "pytest (>=4.5.0)", "recommonmark", "sphinx", "sphinx-autoapi (>=1.4.0)", "sphinx-rtd-theme", "sphinxcontrib-bibtex", "yapf (==0.30.0)"]
 dm_control = ["dm-control"]
-gym = ["atari-py (<0.2.7)", "gym[box2d,atari,classic_control] (==0.17.2)"]
+gym = ["atari-py (<0.2.7)", "gym[box2d,classic_control,atari] (==0.17.2)"]
 mujoco = ["imageio", "mujoco-py (>=2.0,<2.2)"]
 ray = ["ray"]
 tensorflow = ["tensorflow (>=2.4,!=2.5.0)", "tensorflow-probability (>=0.11.0,<=0.12.2)"]
@@ -1883,6 +1883,17 @@ docs = ["furo (>=2022.12.7)", "proselint (>=0.13)", "sphinx-autodoc-typehints (>
 test = ["appdirs (==1.4.4)", "covdefaults (>=2.2.2)", "pytest-cov (>=4)", "pytest-mock (>=3.10)", "pytest (>=7.2)"]
 
 [[package]]
+name = "plotly"
+version = "5.13.0"
+description = "An open-source, interactive data visualization library for Python"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+tenacity = ">=6.2.0"
+
+[[package]]
 name = "pluggy"
 version = "0.13.1"
 description = "plugin and hook calling mechanisms for python"
@@ -1908,6 +1919,29 @@ pywin32 = {version = "*", markers = "platform_system == \"Windows\" and platform
 dev = ["paramiko", "psutil", "pytest-cov", "pytest-mock", "pytest-timeout", "pytest (>=6.0)"]
 docs = ["sphinx-rtd-theme (>=1.0.0)", "sphinx (>=4.0.0)"]
 ssh = ["paramiko"]
+
+[[package]]
+name = "polars"
+version = "0.16.1"
+description = "Blazingly fast DataFrame library"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+typing_extensions = {version = ">=4.0.0", markers = "python_version < \"3.10\""}
+
+[package.extras]
+timezone = ["backports.zoneinfo", "tzdata"]
+all = ["polars"]
+pyarrow = ["pyarrow (>=4.0.0)"]
+numpy = ["numpy (>=1.16.0)"]
+xlsx2csv = ["xlsx2csv (>=0.8.0)"]
+pandas = ["pyarrow (>=4.0.0)", "pandas"]
+matplotlib = ["matplotlib"]
+fsspec = ["fsspec"]
+connectorx = ["connectorx"]
+deltalake = ["deltalake (>=0.6.2)"]
 
 [[package]]
 name = "prometheus-client"
@@ -2642,6 +2676,17 @@ python-versions = "*"
 tqdm = "*"
 
 [[package]]
+name = "tenacity"
+version = "8.1.0"
+description = "Retry code until it succeeds"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.extras]
+doc = ["reno", "sphinx", "tornado (>=4.5)"]
+
+[[package]]
 name = "tensorboard"
 version = "2.11.2"
 description = "TensorBoard lets you watch Tensors Flow"
@@ -3123,7 +3168,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "flake8 (<5)", "pytest-co
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8, <3.11"
-content-hash = "23ccd7d140257310ab6bbf9691ca8362438fd3e602c084820afd6684e9b1dd19"
+content-hash = "12ce12399557c8b5496f393f66a7691c07cba75665db947c358baed5a9d2622a"
 
 [metadata.files]
 absl-py = []
@@ -3260,8 +3305,10 @@ pickleshare = []
 pillow = []
 pkgutil-resolve-name = []
 platformdirs = []
+plotly = []
 pluggy = []
 plumbum = []
+polars = []
 prometheus-client = []
 prompt-toolkit = []
 protobuf = []
@@ -3317,6 +3364,7 @@ stack-data = []
 sympy = []
 tabulate = []
 tdqm = []
+tenacity = []
 tensorboard = []
 tensorboard-data-server = []
 tensorboard-plugin-wit = []

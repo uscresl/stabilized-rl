@@ -111,7 +111,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         clip_grad_norm=True,
         _init_setup_model: bool = True,
         *,
-        kl_loss_coeff_lr,
+        kl_loss_coeff_lr: float,
+        kl_target_stat: str,
     ):
 
         super().__init__(
@@ -183,6 +184,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._kl_loss_coeff_opt = th.optim.SGD(
             [self._kl_loss_coeff_param], lr=kl_loss_coeff_lr
         )
+        assert kl_target_stat in ["mean", "max"]
+        self._kl_target_stat = kl_target_stat
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -310,9 +313,16 @@ class KLPOStbl(OnPolicyAlgorithm):
                 if self.target_kl is not None:
                     mean_kl_div = kl_div.mean()
                     loss += self._kl_loss_coeff_param.detach() * mean_kl_div
-                    loss += self._kl_loss_coeff_param * (
-                        self.target_kl - mean_kl_div.detach()
-                    )
+                    if self._kl_target_stat == "mean":
+                        loss += self._kl_loss_coeff_param * (
+                            self.target_kl - mean_kl_div.detach()
+                        )
+                    elif self._kl_target_stat == "max":
+                        loss += self._kl_loss_coeff_param * (
+                            self.target_kl - kl_div.max().detach()
+                        )
+                    else:
+                        raise ValueError("Invalid kl_target_stat")
                     self._kl_loss_coeff_opt.zero_grad()
 
                 # Optimization step
@@ -343,6 +353,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.logger.record("train/entropy_loss", np.mean(entropy_losses))
         self.logger.record("train/policy_gradient_loss", np.mean(pg_losses))
         self.logger.record("train/value_loss", np.mean(value_losses))
+        self.logger.record("train/final_kl_div", kl_divs[-1])
+        self.logger.record("train/final_max_kl_div", kl_div.max().item())
         self.logger.record("train/kl_div", np.mean(kl_divs))
         self.logger.record("train/clip_fraction", np.mean(clip_fractions))
         self.logger.record("train/loss", loss.item())
