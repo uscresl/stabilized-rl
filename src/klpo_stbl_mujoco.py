@@ -22,6 +22,7 @@ def klpo_stbl(
     *,
     seed,
     target_kl,
+    ent_coef,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -35,6 +36,7 @@ def klpo_stbl(
         gae_lambda=gae_lambda,
         clip_grad_norm=clip_grad_norm,
         target_kl=target_kl,
+        ent_coef=ent_coef,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -45,9 +47,22 @@ def klpo_stbl(
 if __name__ == "__main__":
 
     @clize.run
-    def main(*, seed: int, env: str, log_dir: str, target_kl: float, note: str):
+    def main(
+        *,
+        seed: int,
+        env: str,
+        log_dir: str,
+        target_kl: float,
+        note: str,
+        ent_coef: float = 0.0,
+    ):
         klpo_stbl(
-            dict(log_dir=log_dir), seed=seed, env=env, target_kl=target_kl, note=note
+            dict(log_dir=log_dir),
+            seed=seed,
+            env=env,
+            target_kl=target_kl,
+            note=note,
+            ent_coef=ent_coef,
         )
 
     # ppo_env_names = [
