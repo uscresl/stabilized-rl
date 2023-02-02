@@ -13,9 +13,9 @@ if HOST == "brain.usc.edu":
     GLOBAL_CONTEXT.max_concurrent_jobs = 8
 
 mujoco_envs = [
-    "InvertedDoublePendulum-v2",
+    # "InvertedDoublePendulum-v2",
     "HalfCheetah-v2",
-    "Hopper-v2",
+    # "Hopper-v2",
     "Walker2d-v2",
 ]
 seeds = [1111, 2222, 3333, 4444, 5555, 6666, 7777, 8888, 9999]
@@ -49,7 +49,7 @@ ppo_env_names_v3 = [
 ]
 
 if HOST == "resl34":
-    GLOBAL_CONTEXT.max_concurrent_jobs = 10
+    GLOBAL_CONTEXT.max_concurrent_jobs = 12
 
 for seed in seeds:
     target_kl = 0.2
@@ -141,6 +141,31 @@ for seed in seeds:
             ram_gb=ram_gb,
             priority=21,
         )
+        kl_loss_coeff_lr = 1e-2
+        for target_kl in [0.1, 0.3, 0.5, 1.0]:
+            cmd(
+                "python",
+                "src/klpo_stbl_mujoco.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--note",
+                "learned-kl-loss",
+                "--target-kl",
+                target_kl,
+                "--kl-target-stat",
+                kl_target_stat,
+                "--kl-loss-coeff-lr",
+                kl_loss_coeff_lr,
+                "--log-dir",
+                Out(
+                    f"klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-target-stat={kl_target_stat}_note=learned-kl-loss/"
+                ),
+                warmup_time=3,
+                ram_gb=ram_gb,
+                priority=22,
+            )
 
 # if random.randrange(100) == 0:
 # plot_all_csvs.main()
