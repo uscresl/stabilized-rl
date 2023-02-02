@@ -1,10 +1,13 @@
 from dataclasses import dataclass, field
+from typing import Union
 import os
+import re
 import subprocess
 import psutil
 import time
 import shutil
 import math
+import random
 
 
 @dataclass(frozen=True)
@@ -26,12 +29,29 @@ class Cmd:
     warmup_time: float = 1.0
     ram_gb: float = 4
     priority: int = 10
-    gpus: str or None = None
+    gpus: Union[str, None] = None
 
 
 _BYTES_PER_GB = (1024) ** 3
 # If srun is installed, use slurm
 _USING_SLURM = bool(shutil.which("srun"))
+CUDA_DEVICES = []
+
+
+def get_cuda_gpus():
+    global CUDA_DEVICES
+    _nvidia_smi_proc = subprocess.run(
+        ["nvidia-smi", "--list-gpus"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    output = _nvidia_smi_proc.stdout.decode("utf-8")
+    CUDA_DEVICES = re.findall(r"GPU ([0-9]*):", output)
+
+
+get_cuda_gpus()
+print(f"Using GPUS: {CUDA_DEVICES}")
 
 
 def _ram_in_use_gb():
@@ -116,10 +136,15 @@ def _cmd_name(cmd):
     return name
 
 
-def _run_process(args, *, ram_gb, stdout, stderr):
+def _run_process(args, *, gpus, ram_gb, stdout, stderr):
+    env = os.environ.copy()
     if _USING_SLURM:
         args = ["srun", f"--mem={int(math.ceil(ram_gb))}G", "--"] + args
-    return subprocess.Popen(args, stdout=stdout, stderr=stderr)
+    elif gpus is not None:
+        env["CUDA_VISIBLE_DEVICES"] = gpus
+    elif len(CUDA_DEVICES) > 1:
+        env["CUDA_VISIBLE_DEVICES"] = random.choice(CUDA_DEVICES)
+    return subprocess.Popen(args, stdout=stdout, stderr=stderr, env=env)
 
 
 @dataclass
@@ -236,7 +261,9 @@ class Context:
         stderr = open(os.path.join(cmd_dir, "stderr.txt"), "w")
         args = _cmd_to_args(cmd, self.data_dir)
         print(" ".join(args))
-        proc = _run_process(args, ram_gb=cmd.ram_gb, stdout=stdout, stderr=stderr)
+        proc = _run_process(
+            args, gpus=cmd.gpus, ram_gb=cmd.ram_gb, stdout=stdout, stderr=stderr
+        )
         print(proc.pid)
         self.warmup_deadline = time.monotonic() + cmd.warmup_time
         self.running.append((cmd, proc))
@@ -311,7 +338,7 @@ def cmd(
     warmup_time: float = 1.0,
     ram_gb: float = 4,
     priority: int = 10,
-    gpus: str or None = None,
+    gpus: Union[str, None] = None,
 ):
     """Add a command to be run by the GLOBAL_CONTEXT"""
     GLOBAL_CONTEXT.cmd(
