@@ -27,6 +27,7 @@ def klpo_stbl(
     target_kl,
     ent_coef,
     kl_loss_coeff_lr,
+    kl_loss_coeff_momentum: float,
     kl_target_stat,
 ):
     model = KLPOStbl(
@@ -44,6 +45,7 @@ def klpo_stbl(
         ent_coef=ent_coef,
         kl_loss_coeff_lr=kl_loss_coeff_lr,
         kl_target_stat=kl_target_stat,
+        kl_loss_coeff_momentum=kl_loss_coeff_momentum,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -63,6 +65,7 @@ if __name__ == "__main__":
         note: str,
         ent_coef: float = 0.0,
         kl_loss_coeff_lr: float = 1e-3,
+        kl_loss_coeff_momentum: float = 0.0,
         kl_target_stat: str = "mean",
     ):
         klpo_stbl(
@@ -73,6 +76,7 @@ if __name__ == "__main__":
             note=note,
             ent_coef=ent_coef,
             kl_loss_coeff_lr=kl_loss_coeff_lr,
+            kl_loss_coeff_momentum=kl_loss_coeff_momentum,
             kl_target_stat=kl_target_stat,
         )
 

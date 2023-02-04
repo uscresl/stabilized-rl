@@ -166,6 +166,37 @@ for seed in seeds:
                 ram_gb=ram_gb,
                 priority=22,
             )
+        for target_kl in [0.5]:
+            for ent_coef in [0.0, 0.01, 0.05, 0.02]:
+                for kl_loss_coeff_momentum in [0.0, 0.5, 0.8, 0.9, 0.99]:
+                    kl_loss_coeff_lr = 1e-2
+                    cmd(
+                        "python",
+                        "src/klpo_stbl_mujoco.py",
+                        "--seed",
+                        seed,
+                        "--env",
+                        env,
+                        "--note",
+                        "learned-kl-loss",
+                        "--target-kl",
+                        target_kl,
+                        "--kl-target-stat",
+                        kl_target_stat,
+                        "--kl-loss-coeff-lr",
+                        kl_loss_coeff_lr,
+                        "--kl-loss-coeff-momentum",
+                        kl_loss_coeff_momentum,
+                        "--ent-coef",
+                        ent_coef,
+                        "--log-dir",
+                        Out(
+                            f"klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_ent-coef={ent_coef}_kl-loss-momentum={kl_loss_coeff_momentum}_note=momentum/"
+                        ),
+                        warmup_time=3,
+                        ram_gb=ram_gb,
+                        priority=23,
+                    )
 
 # if random.randrange(100) == 0:
 # plot_all_csvs.main()
