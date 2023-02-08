@@ -3,16 +3,31 @@ import clize
 import os
 import polars as pl
 import plotly.graph_objects as go
+import plotly.express as px
 import re
 import numpy as np
 from typing import Union
+import itertools
 
+COLOR_PALETTE = px.colors.sequential.Viridis
 SEED_RE = re.compile("^(.*)_seed=([0-9]+)_(.*)$")
-ENV_RE = re.compile("^(.*)env=([0-9]+)_(.*)$")
 KV_RE = re.compile("[/_]([^=/]*)=([^/_]+)")
+TOP_KEYS = ["env", "algo", "note"]
+TOP_KEY_PRODUCTS = [f"{k1}_{k2}" for k1 in TOP_KEYS for k2 in TOP_KEYS if k1 != k2]
 
 data_dir = "data"
 out_file_base = "data/plots"
+
+
+def kv_from_csv_path(csv_path: str) -> list[tuple[str, str]]:
+    as_list = KV_RE.findall(csv_path) + [("algo", csv_path.split("/")[2])]
+    as_dict = dict(as_list)
+    for i, k1 in enumerate(TOP_KEYS):
+        for j, k2 in enumerate(TOP_KEYS):
+            if j <= i:
+                continue
+            as_list += [(f"{k1}_{k2}", f"{as_dict.get(k1, '')}_{as_dict.get(k2, '')}")]
+    return as_list
 
 
 def main(data_dir: str = "data", out_file_base: str = "data/plots"):
@@ -27,11 +42,11 @@ def main(data_dir: str = "data", out_file_base: str = "data/plots"):
 
     kv_pair_groups = {}
     for csv_path in csv_paths:
-        for kv_pair in KV_RE.findall(csv_path) + [("algo", csv_path.split("/")[2])]:
+        for kv_pair in kv_from_csv_path(csv_path):
             kv_pair_groups.setdefault(kv_pair, []).append(csv_path)
 
     for kv_pair, kv_csv_path in kv_pair_groups.items():
-        if kv_pair[0] in ["env", "algo"]:
+        if kv_pair[0] in TOP_KEYS or kv_pair[0] in TOP_KEY_PRODUCTS:
             plot_kv_pair_group(kv_pair, kv_csv_path, data, out_file_base)
             plot_kv_pair_group(
                 kv_pair,
@@ -106,20 +121,27 @@ def plot_kv_pair_group(
 ):
     reduce_by_keys: set[str] = set()
     for csv_path in kv_csv_path:
-        kvs = KV_RE.findall(csv_path)
+        kvs = kv_from_csv_path(csv_path)
         for k, _ in kvs:
             reduce_by_keys.add(k)
     for reduce_key in reduce_by_keys:
-        by_reduce_key: dict[str, list[tuple[str, pl.DataFrame]]] = {}
+        by_reduce_key: dict[Union[str, None], list[tuple[str, pl.DataFrame]]] = {}
         # reduce_key e.g. "kl-target"
         for csv_path in kv_csv_path:
-            kv = dict(KV_RE.findall(csv_path))
+            kv = dict(kv_from_csv_path(csv_path))
             by_reduce_key.setdefault(kv.get(reduce_key, None), []).append(
                 (csv_path, data[csv_path])
             )
         fig = go.Figure()
+        color_palette = itertools.cycle(COLOR_PALETTE)
+        dash_palette = itertools.cycle(
+            ["solid", "dot", "dash", "longdash", "dashdot", "longdashdot"]
+        )
         for reduce_value, experiments in by_reduce_key.items():
             # reduce_value e.g. "0.3"
+            color = next(color_palette)
+            color = next(color_palette)
+            dash = next(dash_palette)
             interp = interp_experiments(experiments, x_axes=x_axes, y_axes=y_axes)
             if interp is None:
                 continue
@@ -127,21 +149,22 @@ def plot_kv_pair_group(
             max_line = np.stack(interp_ys).max(axis=0)
             min_line = np.stack(interp_ys).min(axis=0)
             mean_line = np.stack(interp_ys).mean(axis=0)
+            boundary = go.Scatter(
+                x=np.concatenate([interp_x, interp_x[::-1]]),
+                y=np.concatenate([max_line, min_line[::-1]]),
+                fill="toself",
+                name=f"{reduce_key}: {reduce_value}",
+                hovertext=reduce_value,
+                line=dict(color=color, dash=dash),
+            )
+            fig.add_trace(boundary)
             fig.add_trace(
                 go.Scatter(
                     x=interp_x,
                     y=mean_line,
                     name=f"{reduce_key}: {reduce_value} mean",
                     hovertext=reduce_value,
-                )
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=np.concatenate([interp_x, interp_x[::-1]]),
-                    y=np.concatenate([max_line, min_line[::-1]]),
-                    fill="toself",
-                    name=f"{reduce_key}: {reduce_value}",
-                    hovertext=reduce_value,
+                    line=dict(color=color, dash=dash),
                 )
             )
         column_name = y_axes[0].replace("/", ":")
