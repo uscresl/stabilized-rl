@@ -112,6 +112,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         _init_setup_model: bool = True,
         *,
         kl_loss_coeff_lr: float,
+        kl_loss_coeff_momentum: float,
         kl_target_stat: str,
     ):
 
@@ -182,7 +183,9 @@ class KLPOStbl(OnPolicyAlgorithm):
 
         self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
         self._kl_loss_coeff_opt = th.optim.SGD(
-            [self._kl_loss_coeff_param], lr=kl_loss_coeff_lr
+            [self._kl_loss_coeff_param],
+            lr=kl_loss_coeff_lr,
+            momentum=kl_loss_coeff_momentum,
         )
         assert kl_target_stat in ["mean", "max"]
         self._kl_target_stat = kl_target_stat
