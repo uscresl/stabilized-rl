@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Union
+from typing import Type, Union, List
 import os
 import re
 import subprocess
@@ -27,8 +27,8 @@ class Cmd:
     extra_outputs: tuple
     extra_inputs: tuple
     warmup_time: float = 1.0
-    ram_gb: float = 4
-    priority: int = 10
+    ram_gb: float = 4.0
+    priority: Union[int, List[int]] = 10
     gpus: Union[str, None] = None
 
 
@@ -40,14 +40,23 @@ CUDA_DEVICES = []
 
 def get_cuda_gpus():
     global CUDA_DEVICES
-    _nvidia_smi_proc = subprocess.run(
-        ["nvidia-smi", "--list-gpus"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
-    output = _nvidia_smi_proc.stdout.decode("utf-8")
-    CUDA_DEVICES = re.findall(r"GPU ([0-9]*):", output)
+    visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES", None)
+    if visible_devices is None:
+        _nvidia_smi_proc = subprocess.run(
+            ["nvidia-smi", "--list-gpus"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        output = _nvidia_smi_proc.stdout.decode("utf-8")
+        CUDA_DEVICES = re.findall(r"GPU ([0-9]*):", output)
+    else:
+        if visible_devices == "-1":
+            CUDA_DEVICES = []
+        try:
+            CUDA_DEVICES = [str(int(d)) for d in visible_devices.split(",")]
+        except ValueError:
+            CUDA_DEVICES = []
 
 
 get_cuda_gpus()
@@ -93,8 +102,12 @@ def _filter_cmds_ram(commands, *, reserved_ram_gb, ram_gb_cap):
 
 
 def _sort_cmds(commands):
-    def key(cmd):
-        return (-cmd.priority, cmd.warmup_time, cmd.ram_gb)
+    def key(cmd) -> tuple[list[int], float, float]:
+        priority_as_list = cmd.priority
+        if not isinstance(priority_as_list, (list, tuple)):
+            priority_as_list = [priority_as_list]
+
+        return ([-prio for prio in priority_as_list], cmd.warmup_time, cmd.ram_gb)
 
     return sorted(list(commands), key=key)
 
@@ -143,7 +156,7 @@ def _run_process(args, *, gpus, ram_gb, stdout, stderr):
     elif gpus is not None:
         env["CUDA_VISIBLE_DEVICES"] = gpus
     elif len(CUDA_DEVICES) > 1:
-        env["CUDA_VISIBLE_DEVICES"] = random.choice(CUDA_DEVICES)
+        env["CUDA_VISIBLE_DEVICES"] = str(random.choice(CUDA_DEVICES))
     return subprocess.Popen(args, stdout=stdout, stderr=stderr, env=env)
 
 
