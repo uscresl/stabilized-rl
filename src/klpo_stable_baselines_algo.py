@@ -2,9 +2,12 @@ import copy
 import warnings
 from typing import Any, Dict, Optional, Type, TypeVar, Union
 
+import gym
 import numpy as np
 import torch as th
 from gym import spaces
+from stable_baselines3.common.buffers import RolloutBuffer
+from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.policies import (
     ActorCriticCnnPolicy,
@@ -12,12 +15,15 @@ from stable_baselines3.common.policies import (
     BasePolicy,
     MultiInputActorCriticPolicy,
 )
-from stable_baselines3.common.buffers import RolloutBuffer
-
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
-from stable_baselines3.common.utils import explained_variance, get_schedule_fn
-from torch.distributions.independent import Independent
+from stable_baselines3.common.utils import (
+    explained_variance,
+    get_schedule_fn,
+    obs_as_tensor,
+)
+from stable_baselines3.common.vec_env import VecEnv
 from torch.distributions import kl_divergence
+from torch.distributions.independent import Independent
 from torch.nn import functional as F
 
 MIN_KL_LOSS_COEFF = 1e-2
@@ -110,6 +116,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         device: Union[th.device, str] = "auto",
         clip_grad_norm=True,
         _init_setup_model: bool = True,
+        max_path_length: int = None,
         *,
         kl_loss_coeff_lr: float,
         kl_loss_coeff_momentum: float,
@@ -145,7 +152,7 @@ class KLPOStbl(OnPolicyAlgorithm):
             assert (
                 batch_size > 1
             ), "`batch_size` must be greater than 1. See https://github.com/DLR-RM/stable-baselines3/issues/440"
-
+        assert self.n_steps == n_steps
         if self.env is not None:
             # Check that `n_steps * n_envs > 1` to avoid NaN
             # when doing advantage normalization
@@ -180,6 +187,10 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._clip_grad_norm = clip_grad_norm
 
         self.target_kl = target_kl
+        if max_path_length is None:
+            self.max_path_length = n_steps
+        else:
+            self.max_path_length = max_path_length
 
         self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
         self._kl_loss_coeff_opt = th.optim.SGD(
@@ -435,3 +446,121 @@ class KLPOStbl(OnPolicyAlgorithm):
             self.historic_buffer.pos = (
                 self.historic_buffer.pos + buffer_len
             ) % self.historic_buffer.buffer_size
+
+    def collect_rollouts(
+        self,
+        env: VecEnv,
+        callback: BaseCallback,
+        rollout_buffer: RolloutBuffer,
+        n_rollout_steps: int,
+    ) -> bool:
+        """
+        Collect experiences using the current policy and fill a ``RolloutBuffer``.
+        The term rollout here refers to the model-free notion and should not
+        be used with the concept of rollout used in model-based RL or planning.
+
+        :param env: The training environment
+        :param callback: Callback that will be called at each step
+            (and at the beginning and end of the rollout)
+        :param rollout_buffer: Buffer to fill with rollouts
+        :param n_rollout_steps: Number of experiences to collect per environment
+        :return: True if function returned with at least `n_rollout_steps`
+            collected, False if callback terminated rollout prematurely.
+        """
+        assert self._last_obs is not None, "No previous observation was provided"
+        # Switch to eval mode (this affects batch norm / dropout)
+        self.policy.set_training_mode(False)
+
+        n_steps = 0
+        episode_steps = 0
+        rollout_buffer.reset()
+        # Sample new weights for the state dependent exploration
+        if self.use_sde:
+            self.policy.reset_noise(env.num_envs)
+
+        callback.on_rollout_start()
+
+        while n_steps < n_rollout_steps:
+            if (
+                self.use_sde
+                and self.sde_sample_freq > 0
+                and n_steps % self.sde_sample_freq == 0
+            ):
+                # Sample a new noise matrix
+                self.policy.reset_noise(env.num_envs)
+
+            with th.no_grad():
+                # Convert to pytorch tensor or to TensorDict
+                obs_tensor = obs_as_tensor(self._last_obs, self.device)
+                actions, values, log_probs = self.policy(obs_tensor)
+            actions = actions.cpu().numpy()
+
+            # Rescale and perform action
+            clipped_actions = actions
+            # Clip the actions to avoid out of bound error
+            if isinstance(self.action_space, gym.spaces.Box):
+                clipped_actions = np.clip(
+                    actions, self.action_space.low, self.action_space.high
+                )
+
+            new_obs, rewards, dones, infos = env.step(clipped_actions)
+
+            self.num_timesteps += env.num_envs
+
+            # Give access to local variables
+            callback.update_locals(locals())
+            if callback.on_step() is False:
+                return False
+
+            self._update_info_buffer(infos)
+            n_steps += 1
+            episode_steps += 1
+
+            if isinstance(self.action_space, gym.spaces.Discrete):
+                # Reshape in case of discrete action
+                actions = actions.reshape(-1, 1)
+
+            # Handle timeout by bootstraping with value function
+            # see GitHub issue #633
+            for idx, done in enumerate(dones):
+                if (
+                    done
+                    and infos[idx].get("terminal_observation") is not None
+                    and infos[idx].get("TimeLimit.truncated", False)
+                ):
+                    terminal_obs = self.policy.obs_to_tensor(
+                        infos[idx]["terminal_observation"]
+                    )[0]
+                    with th.no_grad():
+                        terminal_value = self.policy.predict_values(terminal_obs)[0]
+                    rewards[idx] += self.gamma * terminal_value
+
+            rollout_buffer.add(
+                self._last_obs,
+                actions,
+                rewards,
+                self._last_episode_starts,
+                values,
+                log_probs,
+            )
+            if episode_steps >= self.max_path_length:
+                self._last_obs = self.env.reset()
+                self._last_episode_starts = True
+                episode_steps = 0
+            else:
+                self._last_obs = new_obs
+                self._last_episode_starts = dones
+
+        with th.no_grad():
+            # Compute value for the last timestep
+            values = self.policy.predict_values(obs_as_tensor(new_obs, self.device))
+
+        rollout_buffer.compute_returns_and_advantage(last_values=values, dones=dones)
+
+        callback.on_rollout_end()
+
+        # Reset env at end of collection
+        self._last_obs = self.env.reset()
+        self._last_episode_starts = True
+
+        return True

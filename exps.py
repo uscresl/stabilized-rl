@@ -1,8 +1,10 @@
 from doexp import cmd, In, Out, GLOBAL_CONTEXT
 from socket import gethostname
 import random
-import plot_all_csvs
+
+# import plot_all_csvs
 import sys
+from metaworld.envs.mujoco.env_dict import MT10_V2
 
 # Uncomment to stop starting new runs
 # sys.exit(1)
@@ -265,7 +267,45 @@ if HOST == "resl34":
                     )
                     + int(seed / 1000),
                 )
-
+else:
+    for seed in seeds:
+        target_kl = 0.2
+        ram_gb = 4
+        for env in MT10_V2.keys():
+            target_kl = 0.1
+            kl_target_stat = "max"
+            kl_loss_coeff_momentum = 0.99
+            kl_loss_coeff_lr = 1e-2
+            ent_coef = 0.0
+            cmd(
+                "python",
+                "src/klpo_stbl_MT10.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--note",
+                "tuned",
+                "--target-kl",
+                target_kl,
+                "--kl-target-stat",
+                kl_target_stat,
+                "--kl-loss-coeff-lr",
+                kl_loss_coeff_lr,
+                "--kl-loss-coeff-momentum",
+                kl_loss_coeff_momentum,
+                "--ent-coef",
+                ent_coef,
+                "--n-steps",
+                4096,
+                "--log-dir",
+                Out(
+                    f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_ent-coef={ent_coef}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-momentum={kl_loss_coeff_momentum}_note=tuned/"
+                ),
+                warmup_time=3,
+                ram_gb=ram_gb,
+                priority=24,
+            )
 
 # if random.randrange(100) == 0:
 #     plot_all_csvs.main()
