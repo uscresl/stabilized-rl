@@ -250,9 +250,11 @@ if HOST == "resl34":
                     kl_loss_coeff_momentum,
                     "--ent-coef",
                     ent_coef,
+                    "--n-steps",
+                    n_steps,
                     "--log-dir",
                     Out(
-                        f"klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_ent-coef={ent_coef}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-momentum={kl_loss_coeff_momentum}_n-steps={n_steps}_note=batch-size-sweep/"
+                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_note=batch-size-sweep2/"
                     ),
                     warmup_time=3,
                     ram_gb=ram_gb,
