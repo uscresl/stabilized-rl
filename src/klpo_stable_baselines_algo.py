@@ -101,8 +101,6 @@ class KLPOStbl(OnPolicyAlgorithm):
         clip_range_vf: Union[None, float, Schedule] = None,
         normalize_advantage: bool = True,
         normalize_batch_advantage: bool = True,
-        lr_loss_coeff=0.5,
-        lr_sq_loss_coeff=0.5,
         ent_coef: float = 0.0,
         vf_coef: float = 0.5,
         max_grad_norm: float = 0.5,
@@ -118,6 +116,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         _init_setup_model: bool = True,
         max_path_length: int = None,
         *,
+        kl_loss_exp: float = 4.0,
         kl_loss_coeff_lr: float,
         kl_loss_coeff_momentum: float,
         kl_target_stat: str,
@@ -180,8 +179,6 @@ class KLPOStbl(OnPolicyAlgorithm):
         if _init_setup_model:
             self._setup_model()
 
-        self._lr_loss_coeff = lr_loss_coeff
-        self._lr_sq_loss_coeff = lr_sq_loss_coeff
         self._old_policy = copy.deepcopy(self.policy)
         self._normalize_batch_advantage = normalize_batch_advantage
         self._clip_grad_norm = clip_grad_norm
@@ -193,13 +190,11 @@ class KLPOStbl(OnPolicyAlgorithm):
             self.max_path_length = max_path_length
 
         self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
-        self._kl_loss_coeff_opt = th.optim.SGD(
-            [self._kl_loss_coeff_param],
-            lr=kl_loss_coeff_lr,
-            momentum=kl_loss_coeff_momentum,
-        )
+        self._kl_loss_coeff_lr = kl_loss_coeff_lr
+        self._kl_loss_coeff_momentum = kl_loss_coeff_momentum
         assert kl_target_stat in ["mean", "max"]
         self._kl_target_stat = kl_target_stat
+        self._kl_loss_exp = kl_loss_exp
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -245,6 +240,14 @@ class KLPOStbl(OnPolicyAlgorithm):
         historic_obs = self.historic_buffer.observations[:max_idx].copy()
         historic_obs = self.historic_buffer.swap_and_flatten(historic_obs)
         historic_obs = self.historic_buffer.to_torch(historic_obs)
+
+        self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
+        kl_loss_coeff_opt = th.optim.SGD(
+            [self._kl_loss_coeff_param],
+            lr=self._kl_loss_coeff_lr,
+            momentum=self._kl_loss_coeff_momentum,
+        )
+
         # train for n_epochs epochs
         for epoch in range(self.n_epochs):
             kl_divs = []
@@ -320,16 +323,12 @@ class KLPOStbl(OnPolicyAlgorithm):
                 loss = (
                     pg_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
                 )
-                if self._lr_loss_coeff:
-                    loss += (self._lr_loss_coeff * kl_div).mean()
-                if self._lr_sq_loss_coeff:
-                    loss += (self._lr_sq_loss_coeff * (kl_div**2)).mean()
                 if self.target_kl is not None:
-                    mean_kl_div = kl_div.mean()
-                    loss += self._kl_loss_coeff_param.detach() * mean_kl_div
+                    kl_loss = (kl_div / self.target_kl) ** self._kl_loss_exp
+                    loss += self._kl_loss_coeff_param.detach() * kl_loss.mean()
                     if self._kl_target_stat == "mean":
                         loss += self._kl_loss_coeff_param * (
-                            self.target_kl - mean_kl_div.detach()
+                            self.target_kl - kl_div.mean().detach()
                         )
                     elif self._kl_target_stat == "max":
                         loss += self._kl_loss_coeff_param * (
@@ -337,7 +336,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                         )
                     else:
                         raise ValueError("Invalid kl_target_stat")
-                    self._kl_loss_coeff_opt.zero_grad()
+                    kl_loss_coeff_opt.zero_grad()
 
                 # Optimization step
                 self.policy.optimizer.zero_grad()
@@ -349,7 +348,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                     )
                 self.policy.optimizer.step()
                 if self.target_kl is not None:
-                    self._kl_loss_coeff_opt.step()
+                    kl_loss_coeff_opt.step()
                     if self._kl_loss_coeff_param < MIN_KL_LOSS_COEFF:
                         with th.no_grad():
                             self._kl_loss_coeff_param.copy_(MIN_KL_LOSS_COEFF)
