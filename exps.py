@@ -230,7 +230,7 @@ if HOST == "resl34":
                 ram_gb=ram_gb,
                 priority=24,
             )
-            for n_steps in [512, 1024, 2048, 4096, 8192]:
+            for n_steps in [1024, 2048, 4096, 8192]:
                 cmd(
                     "python",
                     "src/klpo_stbl_mujoco.py",

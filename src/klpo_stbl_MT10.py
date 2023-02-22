@@ -29,8 +29,6 @@ def klpo_stbl_MT10(
     ctxt=None,
     env="HalfCheetah-v3",
     normalize_batch_advantage=True,
-    lr_loss_coeff=0,
-    lr_sq_loss_coeff=0,
     n_steps=4096,
     gae_lambda=0.97,
     vf_arch=[64, 64],
@@ -49,8 +47,6 @@ def klpo_stbl_MT10(
     model = KLPOStbl(
         "MlpPolicy",
         env,
-        lr_loss_coeff=lr_loss_coeff,
-        lr_sq_loss_coeff=lr_sq_loss_coeff,
         seed=seed,
         normalize_batch_advantage=normalize_batch_advantage,
         n_steps=n_steps,
