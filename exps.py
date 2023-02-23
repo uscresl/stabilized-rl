@@ -340,44 +340,130 @@ if HOST == "resl34":
                     )
 
 else:
+    GLOBAL_CONTEXT.max_concurrent_jobs = 3
+    ram_gb = 6
     for seed in seeds:
-        target_kl = 0.2
-        ram_gb = 4
-        for env in MT10_V2.keys():
-            target_kl = 0.1
-            kl_target_stat = "max"
-            kl_loss_coeff_momentum = 0.99
-            kl_loss_coeff_lr = 1e-2
-            ent_coef = 0.0
-            cmd(
-                "python",
-                "src/klpo_stbl_MT10.py",
-                "--seed",
-                seed,
-                "--env",
-                env,
-                "--note",
-                "tuned",
-                "--target-kl",
-                target_kl,
-                "--kl-target-stat",
-                kl_target_stat,
-                "--kl-loss-coeff-lr",
-                kl_loss_coeff_lr,
-                "--kl-loss-coeff-momentum",
-                kl_loss_coeff_momentum,
-                "--ent-coef",
-                ent_coef,
-                "--n-steps",
-                4096,
-                "--log-dir",
-                Out(
-                    f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_ent-coef={ent_coef}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-momentum={kl_loss_coeff_momentum}_note=tuned/"
-                ),
-                warmup_time=3,
-                ram_gb=ram_gb,
-                priority=24,
-            )
+        for env in ["reach-v2"]:
+            for kl_loss_coeff_lr in [0.05, 0.1, 0.5, 1.0, 2.0]:
+                kl_loss_exp = 4
+                optimize_log_loss_coeff = True
+                target_kl = 0.1
+                kl_target_stat = "max"
+                kl_loss_coeff_momentum = 0.99
+                ent_coef = 0.0
+                cmd(
+                    "python",
+                    "src/klpo_stbl_MT10.py",
+                    "--seed",
+                    seed,
+                    "--env",
+                    env,
+                    "--note",
+                    "tuned",
+                    "--target-kl",
+                    target_kl,
+                    "--kl-target-stat",
+                    kl_target_stat,
+                    "--kl-loss-exp",
+                    kl_loss_exp,
+                    "--optimize-log-loss-coeff",
+                    optimize_log_loss_coeff,
+                    "--kl-loss-coeff-lr",
+                    kl_loss_coeff_lr,
+                    "--kl-loss-coeff-momentum",
+                    kl_loss_coeff_momentum,
+                    "--ent-coef",
+                    ent_coef,
+                    "--n-steps",
+                    4096,
+                    "--log-dir",
+                    Out(
+                        f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_ent-coef={ent_coef}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-momentum={kl_loss_coeff_momentum}_kl_loss_exp={kl_loss_exp}_optimize_log_loss_coeff={optimize_log_loss_coeff}_note=kl_loss_coeff_sweep/"
+                    ),
+                    warmup_time=3,
+                    ram_gb=ram_gb,
+                    priority=28,
+                )
+            for kl_loss_exp in [1, 2, 4, 6]:
+                kl_loss_coeff_lr = 0.5
+                optimize_log_loss_coeff = True
+                target_kl = 0.1
+                kl_target_stat = "max"
+                kl_loss_coeff_momentum = 0.99
+                ent_coef = 0.0
+                cmd(
+                    "python",
+                    "src/klpo_stbl_MT10.py",
+                    "--seed",
+                    seed,
+                    "--env",
+                    env,
+                    "--note",
+                    "tuned",
+                    "--target-kl",
+                    target_kl,
+                    "--kl-target-stat",
+                    kl_target_stat,
+                    "--kl-loss-exp",
+                    kl_loss_exp,
+                    "--optimize-log-loss-coeff",
+                    optimize_log_loss_coeff,
+                    "--kl-loss-coeff-lr",
+                    kl_loss_coeff_lr,
+                    "--kl-loss-coeff-momentum",
+                    kl_loss_coeff_momentum,
+                    "--ent-coef",
+                    ent_coef,
+                    "--n-steps",
+                    4096,
+                    "--log-dir",
+                    Out(
+                        f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_ent-coef={ent_coef}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-momentum={kl_loss_coeff_momentum}_kl_loss_exp={kl_loss_exp}_optimize_log_loss_coeff={optimize_log_loss_coeff}_note=kl_loss_exp_sweep/"
+                    ),
+                    warmup_time=3,
+                    ram_gb=ram_gb,
+                    priority=27,
+                )
+            for optimize_log_loss_coeff in [True, False]:
+                kl_loss_exp = 4
+                kl_loss_coeff_lr = 0.5
+                target_kl = 0.1
+                kl_target_stat = "max"
+                kl_loss_coeff_momentum = 0.99
+                ent_coef = 0.0
+                cmd(
+                    "python",
+                    "src/klpo_stbl_MT10.py",
+                    "--seed",
+                    seed,
+                    "--env",
+                    env,
+                    "--note",
+                    "tuned",
+                    "--target-kl",
+                    target_kl,
+                    "--kl-target-stat",
+                    kl_target_stat,
+                    "--kl-loss-exp",
+                    kl_loss_exp,
+                    "--optimize-log-loss-coeff",
+                    optimize_log_loss_coeff,
+                    "--kl-loss-coeff-lr",
+                    kl_loss_coeff_lr,
+                    "--kl-loss-coeff-momentum",
+                    kl_loss_coeff_momentum,
+                    "--ent-coef",
+                    ent_coef,
+                    "--n-steps",
+                    4096,
+                    "--log-dir",
+                    Out(
+                        f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_ent-coef={ent_coef}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-momentum={kl_loss_coeff_momentum}_kl_loss_exp={kl_loss_exp}_optimize_log_loss_coeff={optimize_log_loss_coeff}_note=log_loss_sweep/"
+                    ),
+                    warmup_time=3,
+                    ram_gb=ram_gb,
+                    priority=26,
+                )
 
 # if random.randrange(100) == 0:
 #     plot_all_csvs.main()
