@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
-from typing import Type, Union, List
+from typing import Type, Union, List, Tuple
 import os
 import re
 import subprocess
+from numpy import isin
 import psutil
 import time
 import shutil
@@ -28,7 +29,7 @@ class Cmd:
     extra_inputs: tuple
     warmup_time: float = 1.0
     ram_gb: float = 4.0
-    priority: Union[int, List[int]] = 10
+    priority: Union[int, Tuple[int, ...]] = 10
     gpus: Union[str, None] = None
 
 
@@ -350,10 +351,12 @@ def cmd(
     extra_inputs=tuple(),
     warmup_time: float = 1.0,
     ram_gb: float = 4,
-    priority: int = 10,
+    priority: Union[int, List[int], Tuple[int, ...]] = 10,
     gpus: Union[str, None] = None,
 ):
     """Add a command to be run by the GLOBAL_CONTEXT"""
+    if isinstance(priority, list):
+        priority = tuple(priority)
     GLOBAL_CONTEXT.cmd(
         Cmd(
             args=tuple(args),

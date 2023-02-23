@@ -120,6 +120,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         kl_loss_coeff_lr: float,
         kl_loss_coeff_momentum: float,
         kl_target_stat: str,
+        optimize_log_loss_coeff: bool,
     ):
 
         super().__init__(
@@ -189,6 +190,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         else:
             self.max_path_length = max_path_length
 
+        self._optimize_log_loss_coeff = optimize_log_loss_coeff
         self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
         self._kl_loss_coeff_lr = kl_loss_coeff_lr
         self._kl_loss_coeff_momentum = kl_loss_coeff_momentum
@@ -325,7 +327,15 @@ class KLPOStbl(OnPolicyAlgorithm):
                 )
                 if self.target_kl is not None:
                     kl_loss = (kl_div / self.target_kl) ** self._kl_loss_exp
-                    loss += self._kl_loss_coeff_param.detach() * kl_loss.mean()
+                    if self._optimize_log_loss_coeff:
+                        # Optimizing the log loss coeff, therefore need to take
+                        # exp to get loss coeff
+                        loss_coeff_param = self._kl_loss_coeff_param.exp2()
+                    else:
+                        loss_coeff_param = self._kl_loss_coeff_param
+                    loss += loss_coeff_param.detach() * kl_loss.mean()
+                    # If optimizing the log loss coeff, then
+                    # self._kl_loss_coeff_param is the "log loss coeff"
                     if self._kl_target_stat == "mean":
                         loss += self._kl_loss_coeff_param * (
                             self.target_kl - kl_div.mean().detach()
