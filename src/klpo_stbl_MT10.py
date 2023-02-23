@@ -10,6 +10,7 @@ from stable_baselines3.common.logger import configure
 import random
 from metaworld.envs.mujoco.sawyer_xyz.v2 import SawyerReachEnvV2
 from metaworld.envs.mujoco.env_dict import MT10_V2
+import os
 
 
 def gen_env(env: str):
@@ -64,6 +65,9 @@ def klpo_stbl_MT10(
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
     model.set_logger(new_logger)
     model.learn(total_steps)
+    model.save(
+        os.path.join(ctxt.snapshot_dir, "saved_model.zip"), exclude=["historic_buffer"]
+    )
 
 
 if __name__ == "__main__":
@@ -83,7 +87,6 @@ if __name__ == "__main__":
         n_steps: int = 4096,
     ):
         env, max_path_length = gen_env(env)
-        n_steps = max_path_length
         klpo_stbl_MT10(
             dict(log_dir=log_dir),
             seed=seed,

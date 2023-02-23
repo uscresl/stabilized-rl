@@ -1,6 +1,6 @@
 import copy
 import warnings
-from typing import Any, Dict, Optional, Type, TypeVar, Union
+from typing import Any, Dict, List, Optional, Type, TypeVar, Union
 
 import gym
 import numpy as np
@@ -204,7 +204,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         # Initialize schedules for policy/value clipping
         self.clip_range = get_schedule_fn(self.clip_range)
         self.historic_buffer = RolloutBuffer(
-            self.n_steps * 10,
+            min(64_000, self.n_steps * 10),
             self.observation_space,
             self.action_space,
             device=self.device,
@@ -488,6 +488,9 @@ class KLPOStbl(OnPolicyAlgorithm):
 
         n_steps = 0
         episode_steps = 0
+        n_successes = 0
+        n_episodes = 0
+        success_flag = False
         rollout_buffer.reset()
         # Sample new weights for the state dependent exploration
         if self.use_sde:
@@ -519,6 +522,8 @@ class KLPOStbl(OnPolicyAlgorithm):
                 )
 
             new_obs, rewards, dones, infos = env.step(clipped_actions)
+            if infos[0].get("success", False):
+                success_flag = True
 
             self.num_timesteps += env.num_envs
 
@@ -562,6 +567,10 @@ class KLPOStbl(OnPolicyAlgorithm):
                 self._last_obs = self.env.reset()
                 self._last_episode_starts = True
                 episode_steps = 0
+                n_episodes += 1
+                if success_flag:
+                    n_successes += 1
+                success_flag = False
             else:
                 self._last_obs = new_obs
                 self._last_episode_starts = dones
@@ -577,5 +586,5 @@ class KLPOStbl(OnPolicyAlgorithm):
         # Reset env at end of collection
         self._last_obs = self.env.reset()
         self._last_episode_starts = True
-
+        self.logger.record("rollout/SuccessRate", n_successes / n_episodes)
         return True
