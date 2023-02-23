@@ -359,10 +359,16 @@ class KLPOStbl(OnPolicyAlgorithm):
                 self.policy.optimizer.step()
                 if self.target_kl is not None:
                     kl_loss_coeff_opt.step()
-                    if self._kl_loss_coeff_param < MIN_KL_LOSS_COEFF:
-                        with th.no_grad():
-                            self._kl_loss_coeff_param.copy_(MIN_KL_LOSS_COEFF)
-                        assert self._kl_loss_coeff_param >= MIN_KL_LOSS_COEFF
+                    if self._optimize_log_loss_coeff:
+                        if self._kl_loss_coeff_param < 1 + MIN_KL_LOSS_COEFF:
+                            with th.no_grad():
+                                self._kl_loss_coeff_param.copy_(1 + MIN_KL_LOSS_COEFF)
+                            assert self._kl_loss_coeff_param >= 1 + MIN_KL_LOSS_COEFF
+                    else:
+                        if self._kl_loss_coeff_param < MIN_KL_LOSS_COEFF:
+                            with th.no_grad():
+                                self._kl_loss_coeff_param.copy_(MIN_KL_LOSS_COEFF)
+                            assert self._kl_loss_coeff_param >= MIN_KL_LOSS_COEFF
 
             if not continue_training:
                 break
