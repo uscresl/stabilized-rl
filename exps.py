@@ -269,6 +269,76 @@ if HOST == "resl34":
                     )
                     + int(seed / 1000),
                 )
+            for n_steps in [4096, 8192, 16384]:
+                for kl_loss_coeff_lr in [0.05, 0.1, 0.5, 1.0, 2.0]:
+                    cmd(
+                        "python",
+                        "src/klpo_stbl_mujoco.py",
+                        "--seed",
+                        seed,
+                        "--env",
+                        env,
+                        "--note",
+                        "batch-size-sweep",
+                        "--target-kl",
+                        target_kl,
+                        "--kl-target-stat",
+                        kl_target_stat,
+                        "--kl-loss-coeff-lr",
+                        kl_loss_coeff_lr,
+                        "--kl-loss-coeff-momentum",
+                        kl_loss_coeff_momentum,
+                        "--ent-coef",
+                        ent_coef,
+                        "--n-steps",
+                        n_steps,
+                        "--log-dir",
+                        Out(
+                            f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_n-steps={n_steps}_note=higher-beta-lr/"
+                        ),
+                        warmup_time=3,
+                        ram_gb=ram_gb,
+                        priority=(
+                            40,
+                            int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
+                            seed,
+                            -n_steps,
+                        ),
+                    )
+                    cmd(
+                        "python",
+                        "src/klpo_stbl_mujoco.py",
+                        "--seed",
+                        seed,
+                        "--env",
+                        env,
+                        "--note",
+                        "opt-log-beta",
+                        "--target-kl",
+                        target_kl,
+                        "--kl-target-stat",
+                        kl_target_stat,
+                        "--kl-loss-coeff-lr",
+                        kl_loss_coeff_lr,
+                        "--kl-loss-coeff-momentum",
+                        kl_loss_coeff_momentum,
+                        "--optimize-log-loss-coeff",
+                        "--n-steps",
+                        n_steps,
+                        "--log-dir",
+                        Out(
+                            f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_n-steps={n_steps}_note=opt-log-beta/"
+                        ),
+                        warmup_time=3,
+                        ram_gb=ram_gb,
+                        priority=(
+                            41,
+                            int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
+                            seed,
+                            -n_steps,
+                        ),
+                    )
+
 else:
     for seed in seeds:
         target_kl = 0.2
