@@ -38,12 +38,14 @@ def klpo_stbl_MT10(
     note="buffer_kl_loss",
     *,
     seed,
-    target_kl,
-    ent_coef,
-    kl_loss_coeff_lr,
+    target_kl: float,
+    kl_loss_exp: int,
+    ent_coef: float,
+    kl_loss_coeff_lr: float,
     kl_loss_coeff_momentum: float,
-    kl_target_stat,
-    max_path_length,
+    kl_target_stat: str,
+    max_path_length: int,
+    optimize_log_loss_coeff: bool,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -58,8 +60,10 @@ def klpo_stbl_MT10(
         ent_coef=ent_coef,
         kl_loss_coeff_lr=kl_loss_coeff_lr,
         kl_target_stat=kl_target_stat,
+        kl_loss_exp=kl_loss_exp,
         kl_loss_coeff_momentum=kl_loss_coeff_momentum,
         max_path_length=max_path_length,
+        optimize_log_loss_coeff=optimize_log_loss_coeff,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -79,6 +83,8 @@ if __name__ == "__main__":
         env: str,
         log_dir: str,
         target_kl: float,
+        kl_loss_exp: int,
+        optimize_log_loss_coeff: bool,
         note: str,
         ent_coef: float = 0.0,
         kl_loss_coeff_lr: float = 1e-3,
@@ -96,6 +102,8 @@ if __name__ == "__main__":
             ent_coef=ent_coef,
             kl_loss_coeff_lr=kl_loss_coeff_lr,
             kl_loss_coeff_momentum=kl_loss_coeff_momentum,
+            kl_loss_exp=kl_loss_exp,
+            optimize_log_loss_coeff=optimize_log_loss_coeff,
             kl_target_stat=kl_target_stat,
             n_steps=n_steps,
             max_path_length=max_path_length,
