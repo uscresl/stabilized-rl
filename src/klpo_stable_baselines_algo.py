@@ -228,6 +228,8 @@ class KLPOStbl(OnPolicyAlgorithm):
 
         entropy_losses = []
         pg_losses, value_losses = [], []
+        kl_losses = []
+        kl_loss_coeffs = []
         clip_fractions = []
 
         continue_training = True
@@ -327,6 +329,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                 )
                 if self.target_kl is not None:
                     kl_loss = (kl_div / self.target_kl) ** self._kl_loss_exp
+                    kl_losses.append(kl_loss.mean().item())
                     if self._optimize_log_loss_coeff:
                         # Optimizing the log loss coeff, therefore need to take
                         # exp to get loss coeff
@@ -369,6 +372,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                             with th.no_grad():
                                 self._kl_loss_coeff_param.copy_(MIN_KL_LOSS_COEFF)
                             assert self._kl_loss_coeff_param >= MIN_KL_LOSS_COEFF
+                kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
 
             if not continue_training:
                 break
@@ -382,11 +386,13 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.logger.record("train/entropy_loss", np.mean(entropy_losses))
         self.logger.record("train/policy_gradient_loss", np.mean(pg_losses))
         self.logger.record("train/value_loss", np.mean(value_losses))
+        self.logger.record("train/kl_loss", np.mean(kl_losses))
         self.logger.record("train/final_kl_div", kl_divs[-1])
         self.logger.record("train/final_max_kl_div", kl_div.max().item())
         self.logger.record("train/kl_div", np.mean(kl_divs))
         self.logger.record("train/clip_fraction", np.mean(clip_fractions))
         self.logger.record("train/loss", loss.item())
+        self.logger.record("train/advantages", batch_adv_mean)
         self.logger.record("train/explained_variance", explained_var)
         if hasattr(self.policy, "log_std"):
             self.logger.record("train/std", th.exp(self.policy.log_std).mean().item())
@@ -394,6 +400,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
         self.logger.record("train/clip_range", clip_range)
         self.logger.record("train/kl_loss_coeff", self._kl_loss_coeff_param.item())
+        self.logger.record("train/kl_loss_coeff_avg", np.mean(kl_loss_coeffs))
 
     def learn(
         self,
