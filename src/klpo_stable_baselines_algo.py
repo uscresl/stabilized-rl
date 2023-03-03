@@ -116,7 +116,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         _init_setup_model: bool = True,
         max_path_length: int = None,
         *,
-        kl_loss_exp: float = 4.0,
+        kl_loss_exp: float = 1.0,
         kl_loss_coeff_lr: float,
         kl_loss_coeff_momentum: float,
         kl_target_stat: str,
