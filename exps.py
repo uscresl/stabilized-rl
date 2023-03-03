@@ -269,8 +269,8 @@ if HOST == "resl34":
                     )
                     + int(seed / 1000),
                 )
-            for n_steps in [4096, 8192, 16384]:
-                for kl_loss_coeff_lr in [0.05, 0.1, 0.5, 1.0, 2.0]:
+            for n_steps in [4096]:
+                for kl_loss_coeff_lr in [0.1, 1.0, 2.0, 5.0]:
                     cmd(
                         "python",
                         "src/klpo_stbl_mujoco.py",
@@ -305,6 +305,9 @@ if HOST == "resl34":
                             -n_steps,
                         ),
                     )
+            kl_loss_exp = 1.0
+            for n_steps in [4096]:
+                for kl_loss_coeff_lr in [1e-3, 1e-2, 0.1, 0.5, 1.0]:
                     cmd(
                         "python",
                         "src/klpo_stbl_mujoco.py",
@@ -313,21 +316,19 @@ if HOST == "resl34":
                         "--env",
                         env,
                         "--note",
-                        "opt-log-beta",
+                        "opt-log-beta2",
                         "--target-kl",
                         target_kl,
-                        "--kl-target-stat",
-                        kl_target_stat,
                         "--kl-loss-coeff-lr",
                         kl_loss_coeff_lr,
-                        "--kl-loss-coeff-momentum",
-                        kl_loss_coeff_momentum,
-                        "--optimize-log-loss-coeff",
                         "--n-steps",
                         n_steps,
+                        "--kl-loss-exp",
+                        kl_loss_exp,
+                        "--optimize-log-loss-coeff",
                         "--log-dir",
                         Out(
-                            f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_n-steps={n_steps}_note=opt-log-beta/"
+                            f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-exp={kl_loss_exp}_n-steps={n_steps}_note=opt-log-beta2/"
                         ),
                         warmup_time=3,
                         ram_gb=ram_gb,
