@@ -365,6 +365,7 @@ class KLPOStbl(OnPolicyAlgorithm):
             kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
             return kl_div
 
+        second_penalty_loops = []
         # train for n_epochs epochs
         for epoch in range(self.n_epochs):
             # Do a complete pass on the rollout buffer
@@ -380,6 +381,7 @@ class KLPOStbl(OnPolicyAlgorithm):
             for rollout_data in self.rollout_buffer.get(self.batch_size):
                 kl_div = minibatch_step(rollout_data=rollout_data, use_pg_loss=True)
 
+            penalty_loops = 0
             while True:
                 if self._kl_target_stat == "mean":
                     if kl_div.mean() <= self.target_kl:
@@ -388,6 +390,8 @@ class KLPOStbl(OnPolicyAlgorithm):
                     if kl_div.max() <= self.target_kl:
                         break
                 kl_div = minibatch_step(rollout_data=rollout_data, use_pg_loss=False)
+                penalty_loops += 1
+            second_penalty_loops.append(penalty_loops)
 
             if not continue_training:
                 break
@@ -407,6 +411,13 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.logger.record("train/final_kl_div", kl_divs[-1])
         self.logger.record("train/final_max_kl_div", kl_div.max().item())
         self.logger.record("train/kl_div", np.mean(kl_divs))
+        self.logger.record("train/final_second_penalty_loops", second_penalty_loops[-1])
+        self.logger.record(
+            "train/mean_second_penalty_loops", np.mean(second_penalty_loops)
+        )
+        self.logger.record(
+            "train/max_second_penalty_loops", np.max(second_penalty_loops)
+        )
         self.logger.record("train/clip_fraction", np.mean(clip_fractions))
         self.logger.record("train/advantages", batch_adv_mean)
         self.logger.record("train/explained_variance", explained_var)
