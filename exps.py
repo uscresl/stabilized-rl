@@ -305,7 +305,6 @@ if HOST == "resl34":
                             -n_steps,
                         ),
                     )
-            kl_loss_exp = 1.0
             for n_steps in [4096]:
                 for kl_loss_coeff_lr in [1e-4, 1e-3]:
                     cmd(
@@ -323,12 +322,10 @@ if HOST == "resl34":
                         kl_loss_coeff_lr,
                         "--n-steps",
                         n_steps,
-                        "--kl-loss-exp",
-                        kl_loss_exp,
                         "--optimize-log-loss-coeff",
                         "--log-dir",
                         Out(
-                            f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-exp={kl_loss_exp}_n-steps={n_steps}_note=opt-log-beta2/"
+                            f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_n-steps={n_steps}_note=opt-log-beta2/"
                         ),
                         warmup_time=3,
                         ram_gb=ram_gb,
@@ -356,13 +353,11 @@ if HOST == "resl34":
                     kl_loss_coeff_lr,
                     "--n-steps",
                     n_steps,
-                    "--kl-loss-exp",
-                    kl_loss_exp,
                     "--optimize-log-loss-coeff",
                     "--reset-policy-optimizer",
                     "--log-dir",
                     Out(
-                        f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-exp={kl_loss_exp}_n-steps={n_steps}_note=reset-policy-opt/"
+                        f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_n-steps={n_steps}_note=reset-policy-opt/"
                     ),
                     warmup_time=3,
                     ram_gb=ram_gb,
@@ -392,13 +387,11 @@ if HOST == "resl34":
                     kl_loss_coeff_momentum,
                     "--n-steps",
                     n_steps,
-                    "--kl-loss-exp",
-                    kl_loss_exp,
                     "--optimize-log-loss-coeff",
                     "--reset-policy-optimizer",
                     "--log-dir",
                     Out(
-                        f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-exp={kl_loss_exp}_n-steps={n_steps}_note=reset-policy-opt+low-coeff-momentum/"
+                        f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_n-steps={n_steps}_note=reset-policy-opt+low-coeff-momentum/"
                     ),
                     warmup_time=3,
                     ram_gb=ram_gb,
@@ -428,13 +421,11 @@ if HOST == "resl34":
                     kl_loss_coeff_momentum,
                     "--n-steps",
                     n_steps,
-                    "--kl-loss-exp",
-                    kl_loss_exp,
                     "--optimize-log-loss-coeff",
                     "--reset-policy-optimizer",
                     "--log-dir",
                     Out(
-                        f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-exp={kl_loss_exp}_n-steps={n_steps}_note=reset-policy-opt+zero-coeff-momentum/"
+                        f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_n-steps={n_steps}_note=reset-policy-opt+zero-coeff-momentum/"
                     ),
                     warmup_time=3,
                     ram_gb=ram_gb,
