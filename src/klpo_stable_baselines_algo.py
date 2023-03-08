@@ -121,6 +121,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         kl_loss_coeff_momentum: float,
         kl_target_stat: str,
         optimize_log_loss_coeff: bool,
+        reset_policy_optimizer: bool = False,
     ):
 
         super().__init__(
@@ -197,6 +198,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         assert kl_target_stat in ["mean", "max"]
         self._kl_target_stat = kl_target_stat
         self._kl_loss_exp = kl_loss_exp
+        self._initial_policy_opt_state_dict = self.policy.optimizer.state_dict()
+        self._reset_policy_optimizer = reset_policy_optimizer
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -261,6 +264,10 @@ class KLPOStbl(OnPolicyAlgorithm):
                 batch_adv_std = self.rollout_buffer.advantages.std()
             # Save the current policy state and train
             self._old_policy.load_state_dict(self.policy.state_dict())
+            if self._reset_policy_optimizer:
+                self.policy.optimizer.load_state_dict(
+                    self._initial_policy_opt_state_dict
+                )
             for rollout_data in self.rollout_buffer.get(self.batch_size):
                 actions = rollout_data.actions
                 if isinstance(self.action_space, spaces.Discrete):
