@@ -46,6 +46,7 @@ def klpo_stbl_MT10(
     kl_target_stat: str,
     max_path_length: int,
     optimize_log_loss_coeff: bool,
+    historic_buffer_size: int,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -64,6 +65,7 @@ def klpo_stbl_MT10(
         kl_loss_coeff_momentum=kl_loss_coeff_momentum,
         max_path_length=max_path_length,
         optimize_log_loss_coeff=optimize_log_loss_coeff,
+        historic_buffer_size=historic_buffer_size,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -86,11 +88,13 @@ if __name__ == "__main__":
         kl_loss_exp: int,
         optimize_log_loss_coeff: bool,
         note: str,
+        historic_buffer_size: int,
         ent_coef: float = 0.0,
         kl_loss_coeff_lr: float = 1e-3,
         kl_loss_coeff_momentum: float = 0.0,
         kl_target_stat: str = "mean",
         n_steps: int = 4096,
+        total_steps: int = 3_000_000,
     ):
         env, max_path_length = gen_env(env)
         klpo_stbl_MT10(
@@ -107,4 +111,6 @@ if __name__ == "__main__":
             kl_target_stat=kl_target_stat,
             n_steps=n_steps,
             max_path_length=max_path_length,
+            total_steps=total_steps,
+            historic_buffer_size=historic_buffer_size,
         )
