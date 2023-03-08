@@ -25,6 +25,7 @@ def klpo_stbl(
     kl_loss_coeff_momentum: float,
     kl_target_stat,
     optimize_log_loss_coeff,
+    reset_policy_optimizer,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -42,6 +43,7 @@ def klpo_stbl(
         kl_target_stat=kl_target_stat,
         kl_loss_coeff_momentum=kl_loss_coeff_momentum,
         optimize_log_loss_coeff=optimize_log_loss_coeff,
+        reset_policy_optimizer=reset_policy_optimizer,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -66,6 +68,7 @@ if __name__ == "__main__":
         kl_loss_exp: float = 1.0,
         n_steps: int = 4096,
         optimize_log_loss_coeff: bool = False,
+        reset_policy_optimizer=False,
     ):
         klpo_stbl(
             dict(log_dir=log_dir),
@@ -80,4 +83,5 @@ if __name__ == "__main__":
             kl_target_stat=kl_target_stat,
             n_steps=n_steps,
             optimize_log_loss_coeff=optimize_log_loss_coeff,
+            reset_policy_optimizer=reset_policy_optimizer,
         )
