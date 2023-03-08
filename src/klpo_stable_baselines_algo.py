@@ -116,7 +116,6 @@ class KLPOStbl(OnPolicyAlgorithm):
         _init_setup_model: bool = True,
         max_path_length: int = None,
         *,
-        kl_loss_exp: float = 1.0,
         kl_loss_coeff_lr: float,
         kl_loss_coeff_momentum: float,
         kl_target_stat: str,
@@ -197,7 +196,6 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._kl_loss_coeff_momentum = kl_loss_coeff_momentum
         assert kl_target_stat in ["mean", "max"]
         self._kl_target_stat = kl_target_stat
-        self._kl_loss_exp = kl_loss_exp
         self._initial_policy_opt_state_dict = self.policy.optimizer.state_dict()
         self._reset_policy_optimizer = reset_policy_optimizer
 
@@ -254,10 +252,121 @@ class KLPOStbl(OnPolicyAlgorithm):
             lr=self._kl_loss_coeff_lr,
             momentum=self._kl_loss_coeff_momentum,
         )
+        kl_divs = []
+
+        def minibatch_step(rollout_data, use_pg_loss):
+            actions = rollout_data.actions
+            if isinstance(self.action_space, spaces.Discrete):
+                # Convert discrete action from float to long
+                actions = rollout_data.actions.long().flatten()
+
+            # Re-sample the noise matrix because the log_std has changed
+            if self.use_sde:
+                self.policy.reset_noise(self.batch_size)
+
+            with th.no_grad():
+                old_dist = self._old_policy.get_distribution(historic_obs).distribution
+
+            new_dist = self.policy.get_distribution(historic_obs).distribution
+
+            values, log_prob, entropy = self.policy.evaluate_actions(
+                rollout_data.observations, actions
+            )
+            values = values.flatten()
+            # Normalize advantage
+            advantages = rollout_data.advantages
+            # Normalization does not make sense if mini batchsize == 1, see GH issue #325
+            if self.normalize_advantage and len(advantages) > 1:
+                if self._normalize_batch_advantage:
+                    advantages = (advantages - batch_adv_mean) / (batch_adv_std + 1e-8)
+                else:
+                    advantages = (advantages - advantages.mean()) / (
+                        advantages.std() + 1e-8
+                    )
+
+            # ratio between old and new policy, should be one at the first iteration
+            ratio = th.exp(log_prob - rollout_data.old_log_prob)
+            kl_div = kl_divergence(
+                Independent(new_dist, 1),
+                Independent(old_dist, 1),
+            )
+            kl_divs.append(kl_div.mean().item())
+
+            pg_loss = -(advantages * ratio).mean()
+
+            # Logging
+            pg_losses.append(pg_loss.item())
+            clip_fraction = th.mean((th.abs(ratio - 1) > clip_range).float()).item()
+            clip_fractions.append(clip_fraction)
+
+            values_pred = values
+            # Value loss using the TD(gae_lambda) target
+            value_loss = F.mse_loss(rollout_data.returns, values_pred)
+            value_losses.append(value_loss.item())
+
+            # Entropy loss favor exploration
+            if entropy is None:
+                # Approximate entropy when no analytical form
+                entropy_loss = -th.mean(-log_prob)
+            else:
+                entropy_loss = -th.mean(entropy)
+
+            entropy_losses.append(entropy_loss.item())
+
+            loss = pg_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
+            kl_loss = kl_div
+            kl_losses.append(kl_loss.mean().item())
+            if self._optimize_log_loss_coeff:
+                # Optimizing the log loss coeff, therefore need to take
+                # exp to get loss coeff
+                loss_coeff_param = self._kl_loss_coeff_param.exp2()
+            else:
+                loss_coeff_param = self._kl_loss_coeff_param
+
+            if use_pg_loss:
+                loss += loss_coeff_param.detach() * kl_loss.mean()
+            else:
+                loss = loss_coeff_param.detach() * kl_loss.mean()
+
+            # If optimizing the log loss coeff, then
+            # self._kl_loss_coeff_param is the "log loss coeff"
+            if self._kl_target_stat == "mean":
+                loss += self._kl_loss_coeff_param * (
+                    self.target_kl - kl_div.mean().detach()
+                )
+            elif self._kl_target_stat == "max":
+                loss += self._kl_loss_coeff_param * (
+                    self.target_kl - kl_div.max().detach()
+                )
+            else:
+                raise ValueError("Invalid kl_target_stat")
+            kl_loss_coeff_opt.zero_grad()
+
+            # Optimization step
+            self.policy.optimizer.zero_grad()
+            loss.backward()
+            # Clip grad norm
+            if self._clip_grad_norm:
+                th.nn.utils.clip_grad_norm_(
+                    self.policy.parameters(), self.max_grad_norm
+                )
+            self.policy.optimizer.step()
+            kl_loss_coeff_opt.step()
+            if self._optimize_log_loss_coeff:
+                if self._kl_loss_coeff_param < 1 + MIN_KL_LOSS_COEFF:
+                    with th.no_grad():
+                        self._kl_loss_coeff_param.copy_(1 + MIN_KL_LOSS_COEFF)
+                    assert self._kl_loss_coeff_param >= 1 + MIN_KL_LOSS_COEFF
+            else:
+                if self._kl_loss_coeff_param < MIN_KL_LOSS_COEFF:
+                    with th.no_grad():
+                        self._kl_loss_coeff_param.copy_(MIN_KL_LOSS_COEFF)
+                    assert self._kl_loss_coeff_param >= MIN_KL_LOSS_COEFF
+            kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
+            return kl_div
 
         # train for n_epochs epochs
         for epoch in range(self.n_epochs):
-            kl_divs = []
             # Do a complete pass on the rollout buffer
             if self.normalize_advantage and self._normalize_batch_advantage:
                 batch_adv_mean = self.rollout_buffer.advantages.mean()
@@ -269,117 +378,16 @@ class KLPOStbl(OnPolicyAlgorithm):
                     self._initial_policy_opt_state_dict
                 )
             for rollout_data in self.rollout_buffer.get(self.batch_size):
-                actions = rollout_data.actions
-                if isinstance(self.action_space, spaces.Discrete):
-                    # Convert discrete action from float to long
-                    actions = rollout_data.actions.long().flatten()
+                kl_div = minibatch_step(rollout_data=rollout_data, use_pg_loss=True)
 
-                # Re-sample the noise matrix because the log_std has changed
-                if self.use_sde:
-                    self.policy.reset_noise(self.batch_size)
-
-                with th.no_grad():
-                    old_dist = self._old_policy.get_distribution(
-                        historic_obs
-                    ).distribution
-
-                new_dist = self.policy.get_distribution(historic_obs).distribution
-
-                values, log_prob, entropy = self.policy.evaluate_actions(
-                    rollout_data.observations, actions
-                )
-                values = values.flatten()
-                # Normalize advantage
-                advantages = rollout_data.advantages
-                # Normalization does not make sense if mini batchsize == 1, see GH issue #325
-                if self.normalize_advantage and len(advantages) > 1:
-                    if self._normalize_batch_advantage:
-                        advantages = (advantages - batch_adv_mean) / (
-                            batch_adv_std + 1e-8
-                        )
-                    else:
-                        advantages = (advantages - advantages.mean()) / (
-                            advantages.std() + 1e-8
-                        )
-
-                # ratio between old and new policy, should be one at the first iteration
-                ratio = th.exp(log_prob - rollout_data.old_log_prob)
-                kl_div = kl_divergence(
-                    Independent(new_dist, 1),
-                    Independent(old_dist, 1),
-                )
-                kl_divs.append(kl_div.mean().item())
-
-                pg_loss = -(advantages * ratio).mean()
-
-                # Logging
-                pg_losses.append(pg_loss.item())
-                clip_fraction = th.mean((th.abs(ratio - 1) > clip_range).float()).item()
-                clip_fractions.append(clip_fraction)
-
-                values_pred = values
-                # Value loss using the TD(gae_lambda) target
-                value_loss = F.mse_loss(rollout_data.returns, values_pred)
-                value_losses.append(value_loss.item())
-
-                # Entropy loss favor exploration
-                if entropy is None:
-                    # Approximate entropy when no analytical form
-                    entropy_loss = -th.mean(-log_prob)
-                else:
-                    entropy_loss = -th.mean(entropy)
-
-                entropy_losses.append(entropy_loss.item())
-
-                loss = (
-                    pg_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
-                )
-                if self.target_kl is not None:
-                    kl_loss = (kl_div / self.target_kl) ** self._kl_loss_exp
-                    kl_losses.append(kl_loss.mean().item())
-                    if self._optimize_log_loss_coeff:
-                        # Optimizing the log loss coeff, therefore need to take
-                        # exp to get loss coeff
-                        loss_coeff_param = self._kl_loss_coeff_param.exp2()
-                    else:
-                        loss_coeff_param = self._kl_loss_coeff_param
-                    loss += loss_coeff_param.detach() * kl_loss.mean()
-                    # If optimizing the log loss coeff, then
-                    # self._kl_loss_coeff_param is the "log loss coeff"
-                    if self._kl_target_stat == "mean":
-                        loss += self._kl_loss_coeff_param * (
-                            self.target_kl - kl_div.mean().detach()
-                        )
-                    elif self._kl_target_stat == "max":
-                        loss += self._kl_loss_coeff_param * (
-                            self.target_kl - kl_div.max().detach()
-                        )
-                    else:
-                        raise ValueError("Invalid kl_target_stat")
-                    kl_loss_coeff_opt.zero_grad()
-
-                # Optimization step
-                self.policy.optimizer.zero_grad()
-                loss.backward()
-                # Clip grad norm
-                if self._clip_grad_norm:
-                    th.nn.utils.clip_grad_norm_(
-                        self.policy.parameters(), self.max_grad_norm
-                    )
-                self.policy.optimizer.step()
-                if self.target_kl is not None:
-                    kl_loss_coeff_opt.step()
-                    if self._optimize_log_loss_coeff:
-                        if self._kl_loss_coeff_param < 1 + MIN_KL_LOSS_COEFF:
-                            with th.no_grad():
-                                self._kl_loss_coeff_param.copy_(1 + MIN_KL_LOSS_COEFF)
-                            assert self._kl_loss_coeff_param >= 1 + MIN_KL_LOSS_COEFF
-                    else:
-                        if self._kl_loss_coeff_param < MIN_KL_LOSS_COEFF:
-                            with th.no_grad():
-                                self._kl_loss_coeff_param.copy_(MIN_KL_LOSS_COEFF)
-                            assert self._kl_loss_coeff_param >= MIN_KL_LOSS_COEFF
-                kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
+            while True:
+                if self._kl_target_stat == "mean":
+                    if kl_div.mean() <= self.target_kl:
+                        break
+                elif self._kl_target_stat == "max":
+                    if kl_div.max() <= self.target_kl:
+                        break
+                kl_div = minibatch_step(rollout_data=rollout_data, use_pg_loss=False)
 
             if not continue_training:
                 break
@@ -394,11 +402,12 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.logger.record("train/policy_gradient_loss", np.mean(pg_losses))
         self.logger.record("train/value_loss", np.mean(value_losses))
         self.logger.record("train/kl_loss", np.mean(kl_losses))
+        self.logger.record("train/max_batch_kl_div", np.max(kl_divs))
+        self.logger.record("train/mean_batch_kl_div", np.mean(kl_divs))
         self.logger.record("train/final_kl_div", kl_divs[-1])
         self.logger.record("train/final_max_kl_div", kl_div.max().item())
         self.logger.record("train/kl_div", np.mean(kl_divs))
         self.logger.record("train/clip_fraction", np.mean(clip_fractions))
-        self.logger.record("train/loss", loss.item())
         self.logger.record("train/advantages", batch_adv_mean)
         self.logger.record("train/explained_variance", explained_var)
         if hasattr(self.policy, "log_std"):
