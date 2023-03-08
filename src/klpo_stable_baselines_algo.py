@@ -121,6 +121,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         kl_target_stat: str,
         optimize_log_loss_coeff: bool,
         reset_policy_optimizer: bool = False,
+        historic_buffer_size: int = 64_000,
     ):
 
         super().__init__(
@@ -176,6 +177,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.clip_range = clip_range
         self.clip_range_vf = clip_range_vf
         self.normalize_advantage = normalize_advantage
+        self._historic_buffer_size = historic_buffer_size
 
         if _init_setup_model:
             self._setup_model()
@@ -205,7 +207,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         # Initialize schedules for policy/value clipping
         self.clip_range = get_schedule_fn(self.clip_range)
         self.historic_buffer = RolloutBuffer(
-            min(64_000, self.n_steps * 10),
+            self._historic_buffer_size,
             self.observation_space,
             self.action_space,
             device=self.device,
