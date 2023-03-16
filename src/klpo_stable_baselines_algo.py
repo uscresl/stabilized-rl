@@ -121,6 +121,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         kl_loss_coeff_momentum: float,
         kl_target_stat: str,
         optimize_log_loss_coeff: bool,
+        historic_buffer_size: int = 64_000,
     ):
 
         super().__init__(
@@ -176,6 +177,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.clip_range = clip_range
         self.clip_range_vf = clip_range_vf
         self.normalize_advantage = normalize_advantage
+        self._historic_buffer_size = historic_buffer_size
 
         if _init_setup_model:
             self._setup_model()
@@ -197,6 +199,11 @@ class KLPOStbl(OnPolicyAlgorithm):
         assert kl_target_stat in ["mean", "max"]
         self._kl_target_stat = kl_target_stat
         self._kl_loss_exp = kl_loss_exp
+        self.kl_loss_opt = th.optim.SGD(
+            self.policy.parameters(),
+            lr=self.learning_rate,
+            momentum=0,
+        )
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -204,7 +211,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         # Initialize schedules for policy/value clipping
         self.clip_range = get_schedule_fn(self.clip_range)
         self.historic_buffer = RolloutBuffer(
-            min(64_000, self.n_steps * 10),
+            self._historic_buffer_size,
             self.observation_space,
             self.action_space,
             device=self.device,
@@ -336,7 +343,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                         loss_coeff_param = self._kl_loss_coeff_param.exp2()
                     else:
                         loss_coeff_param = self._kl_loss_coeff_param
-                    loss += loss_coeff_param.detach() * kl_loss.mean()
+                    kl_final_loss = loss_coeff_param.detach() * kl_loss.mean()
                     # If optimizing the log loss coeff, then
                     # self._kl_loss_coeff_param is the "log loss coeff"
                     if self._kl_target_stat == "mean":
@@ -353,13 +360,18 @@ class KLPOStbl(OnPolicyAlgorithm):
 
                 # Optimization step
                 self.policy.optimizer.zero_grad()
+                self.kl_loss_opt.zero_grad()
+
                 loss.backward()
+                kl_final_loss.backward()
+
                 # Clip grad norm
                 if self._clip_grad_norm:
                     th.nn.utils.clip_grad_norm_(
                         self.policy.parameters(), self.max_grad_norm
                     )
                 self.policy.optimizer.step()
+                self.kl_loss_opt.step()
                 if self.target_kl is not None:
                     kl_loss_coeff_opt.step()
                     if self._optimize_log_loss_coeff:

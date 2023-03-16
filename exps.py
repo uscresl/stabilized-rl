@@ -346,12 +346,13 @@ else:
     for seed in seeds:
         for env in [
             "pick-place-v2",
-            # "window-open-v2",
+            "window-open-v2",
             # "button-press-topdown-v2",
             # "reach-v2",
         ]:
-            for kl_loss_exp in [1, 2]:
-                for kl_loss_coeff_lr in [0.01, 0.1, 0.5, 1]:
+            kl_loss_exp = 1
+            for kl_loss_coeff_lr in [0.1, 0.5, 1]:
+                for historic_buffer_size in [8192, 16_384, 32_768, 64_000]:
                     optimize_log_loss_coeff = True
                     target_kl = 0.1
                     kl_target_stat = "max"
@@ -382,14 +383,66 @@ else:
                         ent_coef,
                         "--n-steps",
                         4096,
+                        "--total-steps",
+                        6_000_000,
+                        "--historic-buffer-size",
+                        historic_buffer_size,
                         "--log-dir",
                         Out(
-                            f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_ent-coef={ent_coef}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-momentum={kl_loss_coeff_momentum}_kl_loss_exp={kl_loss_exp}_optimize_log_loss_coeff={optimize_log_loss_coeff}_note=kl_loss_exp_sweep/"
+                            f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_ent-coef={ent_coef}_kl-loss-coeff-lr={kl_loss_coeff_lr}_historic-buffer-size={historic_buffer_size}_note=historic_buffer_size_sweep/"
                         ),
                         warmup_time=3,
                         ram_gb=ram_gb,
-                        priority=34,
+                        priority=35,
                     )
+        for env in [
+            "pick-place-v2",
+            # "window-open-v2",
+            # "button-press-topdown-v2",
+            # "reach-v2",
+        ]:
+            kl_loss_exp = 1
+            for kl_loss_coeff_lr in [0.1]:
+                optimize_log_loss_coeff = True
+                target_kl = 0.1
+                kl_target_stat = "max"
+                kl_loss_coeff_momentum = 0.99
+                ent_coef = 0.0
+                cmd(
+                    "python",
+                    "src/klpo_stbl_MT10.py",
+                    "--seed",
+                    seed,
+                    "--env",
+                    env,
+                    "--note",
+                    "tuned",
+                    "--target-kl",
+                    target_kl,
+                    "--kl-target-stat",
+                    kl_target_stat,
+                    "--kl-loss-exp",
+                    kl_loss_exp,
+                    "--optimize-log-loss-coeff",
+                    optimize_log_loss_coeff,
+                    "--kl-loss-coeff-lr",
+                    kl_loss_coeff_lr,
+                    "--kl-loss-coeff-momentum",
+                    kl_loss_coeff_momentum,
+                    "--ent-coef",
+                    ent_coef,
+                    "--n-steps",
+                    4096,
+                    "--total-steps",
+                    3_000_000,
+                    "--log-dir",
+                    Out(
+                        f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_ent-coef={ent_coef}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-momentum={kl_loss_coeff_momentum}_kl_loss_exp={kl_loss_exp}_optimize_log_loss_coeff={optimize_log_loss_coeff}_note=split_kl_loss/"
+                    ),
+                    warmup_time=3,
+                    ram_gb=ram_gb,
+                    priority=37,
+                )
         for env in ["reach-v2"]:
             for kl_loss_coeff_lr in [1.0, 2.0]:
                 kl_loss_exp = 4
