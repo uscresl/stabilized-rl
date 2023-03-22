@@ -22,6 +22,16 @@ mujoco_envs = [
 ]
 seeds = [1111, 2222, 3333, 4444, 5555, 6666, 7777, 8888, 9999]
 
+
+ppo_env_names_v3 = [
+    "HalfCheetah-v3",
+    "Walker2d-v3",
+    "Hopper-v3",
+    "Swimmer-v3",
+    "InvertedPendulum-v2",
+    "Reacher-v2",
+]
+
 if HOST == "brain.usc.edu":
     for seed in seeds:
         for env in mujoco_envs:
@@ -40,18 +50,8 @@ if HOST == "brain.usc.edu":
                 ram_gb=20,
                 priority=-10,
             )
-
-ppo_env_names_v3 = [
-    "HalfCheetah-v3",
-    "Walker2d-v3",
-    "Hopper-v3",
-    "Swimmer-v3",
-    "InvertedPendulum-v2",
-    "Reacher-v2",
-]
-
-if HOST == "resl34":
-    GLOBAL_CONTEXT.max_concurrent_jobs = 12
+elif HOST == "resl34":
+    GLOBAL_CONTEXT.max_concurrent_jobs = 8
     for seed in seeds:
         target_kl = 0.2
         ram_gb = 4
@@ -468,7 +468,7 @@ if HOST == "resl34":
                 )
             kl_loss_coeff_lr = 1.0
             kl_loss_coeff_momentum = 0.99
-            for target_kl in [0.05, 0.1, 0.2, 0.3, 0.5, 1.0]:
+            for target_kl in [0.001, 0.005, 0.01, 0.03, 0.05, 0.1, 0.2, 0.3]:
                 cmd(
                     "python",
                     "src/klpo_stbl_mujoco.py",
@@ -492,10 +492,139 @@ if HOST == "resl34":
                     warmup_time=3,
                     ram_gb=ram_gb,
                     priority=(
-                        44,
+                        46,
+                        int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
+                        -target_kl,
+                        seed,
+                    ),
+                )
+            target_kl = 0.05
+            for n_steps in [1024, 2048, 4096]:
+                cmd(
+                    "python",
+                    "src/klpo_stbl_mujoco.py",
+                    "--seed",
+                    seed,
+                    "--env",
+                    env,
+                    "--target-kl",
+                    target_kl,
+                    "--kl-loss-coeff-lr",
+                    kl_loss_coeff_lr,
+                    "--kl-loss-coeff-momentum",
+                    kl_loss_coeff_momentum,
+                    "--n-steps",
+                    n_steps,
+                    "--reset-policy-optimizer",
+                    "--log-dir",
+                    Out(
+                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note=batch-size-sweep4/"
+                    ),
+                    warmup_time=3,
+                    ram_gb=ram_gb,
+                    priority=(
+                        45,
                         int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
                         seed,
-                        target_kl,
+                    ),
+                )
+            target_kl = 0.05
+            kl_loss_coeff_momentum = 0.999
+            for kl_loss_coeff_lr in [0.01, 0.1]:
+                cmd(
+                    "python",
+                    "src/klpo_stbl_mujoco.py",
+                    "--seed",
+                    seed,
+                    "--env",
+                    env,
+                    "--target-kl",
+                    target_kl,
+                    "--kl-loss-coeff-lr",
+                    kl_loss_coeff_lr,
+                    "--kl-loss-coeff-momentum",
+                    kl_loss_coeff_momentum,
+                    "--n-steps",
+                    n_steps,
+                    "--reset-policy-optimizer",
+                    "--log-dir",
+                    Out(
+                        f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_n-steps={n_steps}_target-kl={target_kl}_note=even-higher-momentum/"
+                    ),
+                    warmup_time=3,
+                    ram_gb=ram_gb,
+                    priority=(
+                        47,
+                        int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
+                        -target_kl,
+                        seed,
+                    ),
+                )
+            target_kl = 0.05
+            kl_loss_coeff_lr = 5.0
+            kl_loss_coeff_momentum = 0.99
+            cmd(
+                "python",
+                "src/klpo_stbl_mujoco.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--target-kl",
+                target_kl,
+                "--kl-loss-coeff-lr",
+                kl_loss_coeff_lr,
+                "--kl-loss-coeff-momentum",
+                kl_loss_coeff_momentum,
+                "--n-steps",
+                n_steps,
+                "--reset-policy-optimizer",
+                "--log-dir",
+                Out(
+                    f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_n-steps={n_steps}_target-kl={target_kl}_note=even-higher-lr/"
+                ),
+                warmup_time=3,
+                ram_gb=ram_gb,
+                priority=(
+                    46,
+                    int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
+                    -target_kl,
+                    seed,
+                ),
+            )
+            target_kl = 0.03
+            kl_loss_coeff_lr = 0.1
+            kl_loss_coeff_momentum = 0.999
+            n_steps = 4096
+            for use_minibatch_kl_penalty in [True, False]:
+                cmd(
+                    "python",
+                    "src/klpo_stbl_mujoco.py",
+                    "--seed",
+                    seed,
+                    "--env",
+                    env,
+                    "--target-kl",
+                    target_kl,
+                    "--kl-loss-coeff-lr",
+                    kl_loss_coeff_lr,
+                    "--kl-loss-coeff-momentum",
+                    kl_loss_coeff_momentum,
+                    "--n-steps",
+                    n_steps,
+                    "--reset-policy-optimizer",
+                    f"--use-minibatch-kl-penalty={use_minibatch_kl_penalty}",
+                    "--log-dir",
+                    Out(
+                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_use-minibatch-kl-penalty={use_minibatch_kl_penalty}_note=minibatch-kl/"
+                    ),
+                    warmup_time=3,
+                    ram_gb=ram_gb,
+                    priority=(
+                        47,
+                        int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
+                        int(use_minibatch_kl_penalty),
+                        seed,
                     ),
                 )
 
