@@ -37,6 +37,7 @@ _BYTES_PER_GB = (1024) ** 3
 # If srun is installed, use slurm
 _USING_SLURM = bool(shutil.which("srun"))
 CUDA_DEVICES = []
+next_cuda_device = 0
 
 
 def get_cuda_gpus():
@@ -151,13 +152,15 @@ def _cmd_name(cmd):
 
 
 def _run_process(args, *, gpus, ram_gb, stdout, stderr):
+    global next_cuda_device
     env = os.environ.copy()
     if _USING_SLURM:
         args = ["srun", f"--mem={int(math.ceil(ram_gb))}G", "--"] + args
     elif gpus is not None:
         env["CUDA_VISIBLE_DEVICES"] = gpus
     elif len(CUDA_DEVICES) > 1:
-        env["CUDA_VISIBLE_DEVICES"] = str(random.choice(CUDA_DEVICES))
+        env["CUDA_VISIBLE_DEVICES"] = str(CUDA_DEVICES[next_cuda_device])
+        next_cuda_device = (next_cuda_device + 1) % len(CUDA_DEVICES)
     return subprocess.Popen(args, stdout=stdout, stderr=stderr, env=env)
 
 
