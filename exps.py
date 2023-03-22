@@ -403,7 +403,7 @@ if HOST == "resl34":
                     ),
                 )
             kl_loss_coeff_momentum = 0.0
-            for kl_loss_coeff_lr in [2.5e-4, 1e-2, 1.0, 2.0]:
+            for kl_loss_coeff_lr in [1.0]:
                 cmd(
                     "python",
                     "src/klpo_stbl_mujoco.py",
@@ -411,8 +411,6 @@ if HOST == "resl34":
                     seed,
                     "--env",
                     env,
-                    "--note",
-                    "reset-policy-opt",
                     "--target-kl",
                     target_kl,
                     "--kl-loss-coeff-lr",
@@ -425,15 +423,79 @@ if HOST == "resl34":
                     "--reset-policy-optimizer",
                     "--log-dir",
                     Out(
-                        f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_n-steps={n_steps}_note=reset-policy-opt+zero-coeff-momentum/"
+                        f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_n-steps={n_steps}_note=second-pass-penalty/"
                     ),
                     warmup_time=3,
                     ram_gb=ram_gb,
                     priority=(
                         43,
-                        seed,
                         int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
                         kl_loss_coeff_lr,
+                        seed,
+                    ),
+                )
+            kl_loss_coeff_lr = 1.0
+            for target_kl in [0.05, 0.2, 0.3, 0.5, 1.0]:
+                cmd(
+                    "python",
+                    "src/klpo_stbl_mujoco.py",
+                    "--seed",
+                    seed,
+                    "--env",
+                    env,
+                    "--target-kl",
+                    target_kl,
+                    "--kl-loss-coeff-lr",
+                    kl_loss_coeff_lr,
+                    "--kl-loss-coeff-momentum",
+                    kl_loss_coeff_momentum,
+                    "--n-steps",
+                    n_steps,
+                    "--optimize-log-loss-coeff",
+                    "--reset-policy-optimizer",
+                    "--log-dir",
+                    Out(
+                        f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_n-steps={n_steps}_target-kl={target_kl}_note=second-pass-penalty/"
+                    ),
+                    warmup_time=3,
+                    ram_gb=ram_gb,
+                    priority=(
+                        43,
+                        int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
+                        seed,
+                        target_kl,
+                    ),
+                )
+            kl_loss_coeff_lr = 1.0
+            kl_loss_coeff_momentum = 0.99
+            for target_kl in [0.05, 0.1, 0.2, 0.3, 0.5, 1.0]:
+                cmd(
+                    "python",
+                    "src/klpo_stbl_mujoco.py",
+                    "--seed",
+                    seed,
+                    "--env",
+                    env,
+                    "--target-kl",
+                    target_kl,
+                    "--kl-loss-coeff-lr",
+                    kl_loss_coeff_lr,
+                    "--kl-loss-coeff-momentum",
+                    kl_loss_coeff_momentum,
+                    "--n-steps",
+                    n_steps,
+                    "--reset-policy-optimizer",
+                    "--log-dir",
+                    Out(
+                        f"klpo_stbl/env={env}_seed={seed}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_n-steps={n_steps}_target-kl={target_kl}_note=second-pass-penalty+no-log/"
+                    ),
+                    warmup_time=3,
+                    ram_gb=ram_gb,
+                    priority=(
+                        44,
+                        int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
+                        seed,
+                        target_kl,
                     ),
                 )
 
