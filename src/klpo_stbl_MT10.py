@@ -39,7 +39,6 @@ def klpo_stbl_MT10(
     *,
     seed,
     target_kl: float,
-    kl_loss_exp: int,
     ent_coef: float,
     kl_loss_coeff_lr: float,
     kl_loss_coeff_momentum: float,
@@ -47,6 +46,8 @@ def klpo_stbl_MT10(
     max_path_length: int,
     optimize_log_loss_coeff: bool,
     historic_buffer_size: int,
+    reset_policy_optimizer: bool,
+    second_penalty_loop: bool,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -61,11 +62,12 @@ def klpo_stbl_MT10(
         ent_coef=ent_coef,
         kl_loss_coeff_lr=kl_loss_coeff_lr,
         kl_target_stat=kl_target_stat,
-        kl_loss_exp=kl_loss_exp,
         kl_loss_coeff_momentum=kl_loss_coeff_momentum,
         max_path_length=max_path_length,
         optimize_log_loss_coeff=optimize_log_loss_coeff,
         historic_buffer_size=historic_buffer_size,
+        reset_policy_optimizer=reset_policy_optimizer,
+        second_penalty_loop=second_penalty_loop,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -85,7 +87,6 @@ if __name__ == "__main__":
         env: str,
         log_dir: str,
         target_kl: float,
-        kl_loss_exp: int,
         optimize_log_loss_coeff: bool,
         note: str,
         historic_buffer_size: int,
@@ -95,6 +96,8 @@ if __name__ == "__main__":
         kl_target_stat: str = "mean",
         n_steps: int = 4096,
         total_steps: int = 3_000_000,
+        reset_policy_optimizer: bool,
+        second_penalty_loop: bool,
     ):
         env, max_path_length = gen_env(env)
         klpo_stbl_MT10(
@@ -106,11 +109,12 @@ if __name__ == "__main__":
             ent_coef=ent_coef,
             kl_loss_coeff_lr=kl_loss_coeff_lr,
             kl_loss_coeff_momentum=kl_loss_coeff_momentum,
-            kl_loss_exp=kl_loss_exp,
             optimize_log_loss_coeff=optimize_log_loss_coeff,
             kl_target_stat=kl_target_stat,
             n_steps=n_steps,
             max_path_length=max_path_length,
             total_steps=total_steps,
             historic_buffer_size=historic_buffer_size,
+            reset_policy_optimizer=reset_policy_optimizer,
+            second_penalty_loop=second_penalty_loop,
         )
