@@ -122,6 +122,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         optimize_log_loss_coeff: bool,
         reset_policy_optimizer: bool = False,
         historic_buffer_size: int = 64_000,
+        second_penalty_loop: bool = True,
     ):
 
         super().__init__(
@@ -200,6 +201,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._kl_target_stat = kl_target_stat
         self._initial_policy_opt_state_dict = self.policy.optimizer.state_dict()
         self._reset_policy_optimizer = reset_policy_optimizer
+        self._second_penalty_loop = second_penalty_loop
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -384,7 +386,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                 kl_div = minibatch_step(rollout_data=rollout_data, use_pg_loss=True)
 
             penalty_loops = 0
-            while True:
+            while self._second_penalty_loop:
                 if self._kl_target_stat == "mean":
                     if kl_div.mean() <= self.target_kl:
                         break
