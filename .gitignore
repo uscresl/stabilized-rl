@@ -1,6 +1,8 @@
 /venv
+/venv*
 /data
 __pycache__
 /versions
 /.vscode
 *.swp
+*.egg-info
