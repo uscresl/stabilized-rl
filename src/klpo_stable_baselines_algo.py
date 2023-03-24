@@ -252,11 +252,6 @@ class KLPOStbl(OnPolicyAlgorithm):
         historic_obs = self.historic_buffer.swap_and_flatten(historic_obs)
         historic_obs = self.historic_buffer.to_torch(historic_obs)
 
-        with th.no_grad():
-            full_batch_old_dist = self._old_policy.get_distribution(
-                historic_obs
-            ).distribution
-
         self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
         kl_loss_coeff_opt = th.optim.SGD(
             [self._kl_loss_coeff_param],
@@ -274,6 +269,11 @@ class KLPOStbl(OnPolicyAlgorithm):
             # Re-sample the noise matrix because the log_std has changed
             if self.use_sde:
                 self.policy.reset_noise(self.batch_size)
+
+            with th.no_grad():
+                full_batch_old_dist = self._old_policy.get_distribution(
+                    historic_obs
+                ).distribution
 
             full_batch_new_dist = self.policy.get_distribution(
                 historic_obs
