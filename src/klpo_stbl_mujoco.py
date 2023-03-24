@@ -68,7 +68,7 @@ if __name__ == "__main__":
         n_steps: int = 4096,
         optimize_log_loss_coeff: bool = False,
         reset_policy_optimizer=True,
-        use_minibatch_kl_penalty=True,
+        use_minibatch_kl_penalty=False,
     ):
         klpo_stbl(
             dict(log_dir=log_dir),
