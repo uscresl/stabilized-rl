@@ -34,7 +34,7 @@ $$ L_{pg} = -\mathbb{E}_t\left[\frac {\pi_{new}(a_t|s_t)} {\pi_{old}(a_t|s_t)} \
     - Also, have a term $x = 1$
     - i.e.
 
-$$ L_{pi} = xL_{pg} + \beta \mathbb{E}_t\left[KL(\pi_{new}(a_t|s_t), \pi_{old}(a_t|s_t))\right] $$
+$$ L_{\pi} = xL_{pg} + \beta \mathbb{E}_t\left[KL(\pi_{new}(a_t|s_t), \pi_{old}(a_t|s_t))\right] $$
   - Make beta a parameter and add a optimizer and loss on it
     - If the optimizer makes beta become less than 0.01, reset it to 0.01
     - Loss on beta is
@@ -50,7 +50,7 @@ $$ L_{\beta} = \beta * \left(KL_{target} - \mathbb{SG}[max_t(KL(\pi_{new}(a_t|s_
     - Should use full batch gradient descent (might need to use gradient accumulation)
     - I.e. set $x = 0$ in
 
-$$ L_{pi} = xL_{pg} + \beta \mathbb{E}_t\left[KL(\pi_{new}(a_t|s_t), \pi_{old}(a_t|s_t))\right] $$
+$$ L_{\pi} = xL_{pg} + \beta \mathbb{E}_t\left[KL(\pi_{new}(a_t|s_t), \pi_{old}(a_t|s_t))\right] $$
   - That loss should terminate as soon as the KL div statistic is less than the KL target (for the whole batch)
     - i.e. when
 
