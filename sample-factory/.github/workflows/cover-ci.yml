@@ -1,0 +1,47 @@
+name: coverage
+
+on:
+  push:
+    branches:
+    - master
+    - sf2
+  pull_request:
+    branches:
+    - master
+    - sf2
+
+jobs:
+  run-coverage:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.8]
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Add conda to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH
+    - name: Install conda env & dependencies
+      run: |
+       pip install -e '.[atari, mujoco, envpool]'
+       conda list
+    - name: Install codecov dependencies
+      run: |
+        pip install pytest
+        pip install pytest-cov
+    - name: Generate coverage report
+      run: |
+        pytest --cov=./ --cov-config=./.core-coveragerc --cov-report=xml -v
+        ls -al
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: /home/runner/work/sample-factory/sample-factory/coverage.xml
+        verbose: true
