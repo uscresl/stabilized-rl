@@ -60,7 +60,7 @@ if __name__ == "__main__":
         env: str,
         log_dir: str,
         target_kl: float,
-        note: str = "",
+        note: str,
         ent_coef: float = 0.0,
         kl_loss_coeff_lr: float = 0.1,
         kl_loss_coeff_momentum: float = 0.999,
@@ -70,6 +70,8 @@ if __name__ == "__main__":
         reset_policy_optimizer=True,
         use_minibatch_kl_penalty=False,
     ):
+        assert isinstance(use_minibatch_kl_penalty, bool)
+        assert isinstance(reset_policy_optimizer, bool)
         klpo_stbl(
             dict(log_dir=log_dir),
             seed=seed,

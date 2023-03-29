@@ -626,6 +626,43 @@ elif HOST == "resl34":
                         seed,
                     ),
                 )
+            target_kl = 0.03
+            kl_loss_coeff_lr = 0.1
+            kl_loss_coeff_momentum = 0.9999
+            n_steps = 4096
+            note = "minibatch-kl4"
+            for use_minibatch_kl_penalty in [True, False]:
+                cmd(
+                    "python",
+                    "src/klpo_stbl_mujoco.py",
+                    "--seed",
+                    seed,
+                    "--env",
+                    env,
+                    "--target-kl",
+                    target_kl,
+                    "--kl-loss-coeff-lr",
+                    kl_loss_coeff_lr,
+                    "--kl-loss-coeff-momentum",
+                    kl_loss_coeff_momentum,
+                    "--n-steps",
+                    n_steps,
+                    "--note",
+                    note,
+                    "--reset-policy-optimizer",
+                    f"--use-minibatch-kl-penalty={use_minibatch_kl_penalty}",
+                    "--log-dir",
+                    Out(
+                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_use-minibatch-kl-penalty={use_minibatch_kl_penalty}_note={note}/"
+                    ),
+                    warmup_time=3,
+                    ram_gb=ram_gb,
+                    priority=(
+                        51,
+                        int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
+                        seed,
+                    ),
+                )
 
 else:
     GLOBAL_CONTEXT.max_concurrent_jobs = 3
