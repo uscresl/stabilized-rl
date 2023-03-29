@@ -123,6 +123,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         reset_policy_optimizer: bool = False,
         historic_buffer_size: int = 64_000,
         second_penalty_loop: bool = True,
+        use_minibatch_kl_penalty: bool = False,
     ):
 
         super().__init__(
@@ -202,6 +203,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._initial_policy_opt_state_dict = self.policy.optimizer.state_dict()
         self._reset_policy_optimizer = reset_policy_optimizer
         self._second_penalty_loop = second_penalty_loop
+        self._use_minibatch_kl_penalty = use_minibatch_kl_penalty
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -269,9 +271,13 @@ class KLPOStbl(OnPolicyAlgorithm):
                 self.policy.reset_noise(self.batch_size)
 
             with th.no_grad():
-                old_dist = self._old_policy.get_distribution(historic_obs).distribution
+                full_batch_old_dist = self._old_policy.get_distribution(
+                    historic_obs
+                ).distribution
 
-            new_dist = self.policy.get_distribution(historic_obs).distribution
+            full_batch_new_dist = self.policy.get_distribution(
+                historic_obs
+            ).distribution
 
             values, log_prob, entropy = self.policy.evaluate_actions(
                 rollout_data.observations, actions
@@ -290,11 +296,25 @@ class KLPOStbl(OnPolicyAlgorithm):
 
             # ratio between old and new policy, should be one at the first iteration
             ratio = th.exp(log_prob - rollout_data.old_log_prob)
-            kl_div = kl_divergence(
-                Independent(new_dist, 1),
-                Independent(old_dist, 1),
+            full_batch_kl_div = kl_divergence(
+                Independent(full_batch_new_dist, 1),
+                Independent(full_batch_old_dist, 1),
             )
-            kl_divs.append(kl_div.mean().item())
+            kl_divs.append(full_batch_kl_div.mean().item())
+
+            if self._use_minibatch_kl_penalty and use_pg_loss:
+                minibatch_new_dist = self.policy.get_distribution(
+                    rollout_data.observations
+                ).distribution
+                minibatch_old_dist = self._old_policy.get_distribution(
+                    rollout_data.observations
+                ).distribution
+                kl_div = kl_divergence(
+                    Independent(minibatch_new_dist, 1),
+                    Independent(minibatch_old_dist, 1),
+                )
+            else:
+                kl_div = full_batch_kl_div
 
             pg_loss = -(advantages * ratio).mean()
 
