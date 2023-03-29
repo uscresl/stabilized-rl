@@ -664,7 +664,7 @@ elif HOST == "resl34":
                     ),
                 )
 
-else:
+elif HOST == "stygian":
     GLOBAL_CONTEXT.max_concurrent_jobs = 3
     ram_gb = 6
     for seed in seeds[:3]:
@@ -699,8 +699,6 @@ else:
                             seed,
                             "--env",
                             env,
-                            "--note",
-                            "tuned",
                             "--target-kl",
                             target_kl,
                             "--kl-target-stat",
@@ -723,6 +721,8 @@ else:
                             3_000_000,
                             "--historic-buffer-size",
                             historic_buffer_size,
+                            "--note",
+                            note,
                             "--log-dir",
                             Out(
                                 f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_optimize-log-loss-coeff_{optimize_log_loss_coeff}_note={note}/"
