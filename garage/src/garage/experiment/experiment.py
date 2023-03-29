@@ -322,6 +322,19 @@ class ExperimentTemplate:
         dump_json(metadata_log_file, metadata)
         if git_root_path and options['archive_launch_repo']:
             make_launcher_archive(git_root_path=git_root_path, log_dir=log_dir)
+        try:
+            import wandb
+            group = kwargs.get("group", None)
+            if group is None:
+                group = kwargs.get("note", None)
+            if git_root_path:
+                project_dir_name = os.path.split(git_root_path)[-1].decode('utf-8')
+            else:
+                project_dir_name = None
+            wandb.init(project=project_dir_name, group=group, config=kwargs,
+                       sync_tensorboard=True)
+        except ImportError:
+            warnings.warn("Could not import wandb")
 
         logger.add_output(dowel.TextOutput(text_log_file))
         logger.add_output(dowel.CsvOutput(tabular_log_file))
@@ -510,7 +523,7 @@ def get_metadata():
         git_root_path = git_root_path.strip()
     except subprocess.CalledProcessError:
         # This file is always considered not to exist.
-        git_root_path = ''
+        git_root_path = b''
     # We check that the path exists since in old versions of git the above
     # rev-parse command silently exits with 0 when run outside of a git repo.
     if not os.path.exists(git_root_path):
