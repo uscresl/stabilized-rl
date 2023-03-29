@@ -3,6 +3,7 @@ import glob
 import clize
 import os
 import polars as pl
+import plotly
 import plotly.graph_objects as go
 import plotly.express as px
 import re
@@ -194,6 +195,8 @@ def plot_kv_pair_group(
             dash_palette = itertools.cycle(
                 ["solid", "dot", "dash", "longdash", "dashdot", "longdashdot"]
             )
+            boundary_traces = []
+            mean_traces = []
             for reduce_value, experiments in by_reduce_key.items():
                 # reduce_value e.g. "0.3"
                 color = next(color_palette)
@@ -206,16 +209,20 @@ def plot_kv_pair_group(
                 max_line = np.stack(interp_ys).max(axis=0)
                 min_line = np.stack(interp_ys).min(axis=0)
                 mean_line = np.stack(interp_ys).mean(axis=0)
-                boundary = go.Scatter(
-                    x=np.concatenate([interp_x, interp_x[::-1]]),
-                    y=np.concatenate([max_line, min_line[::-1]]),
-                    fill="toself",
-                    name=f"{reduce_key}: {reduce_value}",
-                    hovertext=reduce_value,
-                    line=dict(color=color, dash=dash),
+                red, green, blue = plotly.colors.hex_to_rgb(color)
+                alpha = 0.25
+                boundary_traces.append(
+                    go.Scatter(
+                        x=np.concatenate([interp_x, interp_x[::-1]]),
+                        y=np.concatenate([max_line, min_line[::-1]]),
+                        fill="toself",
+                        name=f"{reduce_key}: {reduce_value}",
+                        hovertext=reduce_value,
+                        fillcolor=f"rgba({red}, {green}, {blue}, {alpha})",
+                        line=dict(color=color, dash=dash),
+                    )
                 )
-                fig.add_trace(boundary)
-                fig.add_trace(
+                mean_traces.append(
                     go.Scatter(
                         x=interp_x,
                         y=mean_line,
@@ -224,6 +231,8 @@ def plot_kv_pair_group(
                         line=dict(color=color, dash=dash),
                     )
                 )
+            fig.add_traces(boundary_traces)
+            fig.add_traces(mean_traces)
             os.makedirs(f"{out_file_base}/{key}={value}", exist_ok=True)
             fig.write_html(
                 f"{out_file_base}/{key}={value}/{column_name}_by_{reduce_key}.html"
