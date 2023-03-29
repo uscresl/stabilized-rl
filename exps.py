@@ -503,29 +503,30 @@ else:
     GLOBAL_CONTEXT.max_concurrent_jobs = 3
     ram_gb = 6
     for seed in seeds[:3]:
+
         for env in [
             "pick-place-v2",
             # "window-open-v2",
             # "button-press-topdown-v2",
             # "reach-v2",
         ]:
-            note = "second_penalty_po_reset_tuning"
-            optimize_log_loss_coeff = True
+            note = "no_log_tuning"
+            optimize_log_loss_coeff = False
             kl_target_stat = "max"
             ent_coef = 0.0
             historic_buffer_size = 64_000
-            for target_kl in [2e-3, 1e-3, 1.5e-3]:
+            for target_kl in [2e-3, 1e-3, 1.5e-3, 3e-3]:
                 for (
                     second_penalty_loop,
                     reset_policy_optimizer,
                     kl_loss_coeff_momentum,
                 ) in [
                     # (True, True, 0.0),
-                    (True, True, 0.5),
                     (True, True, 0.8),
-                    (True, True, 0.99),
+                    (True, True, 0.999),
+                    (True, True, 1),
                 ]:
-                    for kl_loss_coeff_lr in [1.0, 2.0, 3.0]:
+                    for kl_loss_coeff_lr in [3.0, 8.0, 10.0]:
                         cmd(
                             "python",
                             "src/klpo_stbl_MT10.py",
@@ -559,7 +560,7 @@ else:
                             historic_buffer_size,
                             "--log-dir",
                             Out(
-                                f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_second-penalty-loop={second_penalty_loop}_reset-policy-optimizer={reset_policy_optimizer}_note={note}/"
+                                f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_optimize-log-loss-coeff_{optimize_log_loss_coeff}_note={note}/"
                             ),
                             warmup_time=3,
                             ram_gb=ram_gb,
