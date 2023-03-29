@@ -714,11 +714,11 @@ torch = ">=1.0.0,<1.5.0 || >1.5.0"
 torchvision = ">=0.2.1"
 
 [package.extras]
-all = ["atari-py (<0.2.7)", "dm-control", "gym[classic_control,atari,box2d] (==0.17.2)", "imageio", "mpi4py", "mujoco-py (>=2.0,<2.2)", "pybullet (>=2.8.7)", "ray", "tensorflow (>=2.4,!=2.5.0)", "tensorflow-probability (>=0.11.0,<=0.12.2)"]
+all = ["atari-py (<0.2.7)", "dm-control", "gym[atari,classic_control,box2d] (==0.17.2)", "imageio", "mpi4py", "mujoco-py (>=2.0,<2.2)", "pybullet (>=2.8.7)", "ray", "tensorflow (>=2.4,!=2.5.0)", "tensorflow-probability (>=0.11.0,<=0.12.2)"]
 bullet = ["mpi4py", "pybullet (>=2.8.7)"]
-dev = ["flake8", "flake8-docstrings (>=1.5.0)", "flake8-import-order", "isort (>=4.3.21,<5.0.0)", "metaworld @ https://git@api.github.com/repos/rlworkgroup/metaworld/tarball/0875192baaa91c43523708f55866d98eaf3facaf", "pep8-naming (==0.7.0)", "pre-commit", "pycodestyle (>=2.5.0)", "pydocstyle (>=4.0.0)", "pylint (>=2.5.3)", "pytest-cov", "pytest-rerunfailures", "pytest-timeout", "pytest-xdist", "pytest (>=4.5.0)", "recommonmark", "sphinx", "sphinx-autoapi (>=1.4.0)", "sphinx-rtd-theme", "sphinxcontrib-bibtex", "yapf (==0.30.0)"]
+dev = ["flake8", "flake8-docstrings (>=1.5.0)", "flake8-import-order", "isort (>=4.3.21,<5.0.0)", "metaworld", "pep8-naming (==0.7.0)", "pre-commit", "pycodestyle (>=2.5.0)", "pydocstyle (>=4.0.0)", "pylint (>=2.5.3)", "pytest-cov", "pytest-rerunfailures", "pytest-timeout", "pytest-xdist", "pytest (>=4.5.0)", "recommonmark", "sphinx", "sphinx-autoapi (>=1.4.0)", "sphinx-rtd-theme", "sphinxcontrib-bibtex", "yapf (==0.30.0)"]
 dm_control = ["dm-control"]
-gym = ["atari-py (<0.2.7)", "gym[classic_control,atari,box2d] (==0.17.2)"]
+gym = ["atari-py (<0.2.7)", "gym[atari,classic_control,box2d] (==0.17.2)"]
 mujoco = ["imageio", "mujoco-py (>=2.0,<2.2)"]
 ray = ["ray"]
 tensorflow = ["tensorflow (>=2.4,!=2.5.0)", "tensorflow-probability (>=0.11.0,<=0.12.2)"]
@@ -2075,8 +2075,8 @@ wcwidth = "*"
 
 [[package]]
 name = "protobuf"
-version = "4.22.1"
-description = ""
+version = "3.20.3"
+description = "Protocol Buffers"
 category = "main"
 optional = false
 python-versions = ">=3.7"
@@ -3368,7 +3368,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "flake8 (<5)", "pytest-co
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8, <3.11"
-content-hash = "0c6cca3771b7491a02d124853f4eb73b26527aabceacce477b15057ed8ea7e38"
+content-hash = "59623a3e56495689247f2969bccbce46aa5cbeaa0d73638fa1530a0a8b6faa01"
 
 [metadata.files]
 absl-py = []
