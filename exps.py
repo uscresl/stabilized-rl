@@ -593,8 +593,8 @@ elif HOST == "resl34":
                 ),
             )
             target_kl = 0.03
-            kl_loss_coeff_lr = 1.0
-            kl_loss_coeff_momentum = 0.99
+            kl_loss_coeff_lr = 0.1
+            kl_loss_coeff_momentum = 0.999
             n_steps = 4096
             for use_minibatch_kl_penalty in [True, False]:
                 cmd(
@@ -616,13 +616,12 @@ elif HOST == "resl34":
                     f"--use-minibatch-kl-penalty={use_minibatch_kl_penalty}",
                     "--log-dir",
                     Out(
-                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_use-minibatch-kl-penalty={use_minibatch_kl_penalty}_note=minibatch-kl2/"
+                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_use-minibatch-kl-penalty={use_minibatch_kl_penalty}_note=minibatch-kl3/"
                     ),
                     warmup_time=3,
                     ram_gb=ram_gb,
                     priority=(
-                        50,
-                        -int(use_minibatch_kl_penalty),
+                        51,
                         int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
                         seed,
                     ),
