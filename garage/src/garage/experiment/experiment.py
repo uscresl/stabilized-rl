@@ -332,7 +332,7 @@ class ExperimentTemplate:
             else:
                 project_dir_name = None
             wandb.init(project=project_dir_name, group=group, config=kwargs,
-                       sync_tensorboard=True)
+                       sync_tensorboard=True, entity='resl-mixppo')
         except ImportError:
             warnings.warn("Could not import wandb")
 
