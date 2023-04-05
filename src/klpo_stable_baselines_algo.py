@@ -119,9 +119,9 @@ class KLPOStbl(OnPolicyAlgorithm):
         kl_loss_coeff_lr: float,
         kl_loss_coeff_momentum: float,
         kl_target_stat: str,
+        historic_buffer_size: int,
         optimize_log_loss_coeff: bool,
         reset_policy_optimizer: bool = False,
-        historic_buffer_size: int = 64_000,
         second_penalty_loop: bool = True,
         use_minibatch_kl_penalty: bool = False,
     ):
@@ -248,9 +248,15 @@ class KLPOStbl(OnPolicyAlgorithm):
             max_idx = self.historic_buffer.buffer_size
         else:
             max_idx = self.historic_buffer.pos
+
         historic_obs = self.historic_buffer.observations[:max_idx].copy()
         historic_obs = self.historic_buffer.swap_and_flatten(historic_obs)
         historic_obs = self.historic_buffer.to_torch(historic_obs)
+        self.logger.record("buffer/historic_obs_count", max_idx)
+        self.logger.record(
+            "buffer/historic_buffer_size", self.historic_buffer.buffer_size
+        )
+        self.logger.record("buffer/rollout_buffer_len", self.rollout_buffer.pos)
 
         self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
         kl_loss_coeff_opt = th.optim.SGD(
@@ -501,7 +507,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                 self.historic_buffer.__getattribute__(var)[
                     self.historic_buffer.pos : self.historic_buffer.pos
                     + remaining_space
-                ] = self.rollout_buffer.__getattribute__(var)[:remaining_space]
+                ] = self.rollout_buffer.__getattribute__(var)[:remaining_space].copy()
 
             # Overwrite the remaining from the start
             for var in vars_to_copy:
