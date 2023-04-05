@@ -613,7 +613,9 @@ elif HOST == "resl34":
                     "--n-steps",
                     n_steps,
                     "--reset-policy-optimizer",
-                    f"--use-minibatch-kl-penalty={use_minibatch_kl_penalty}",
+                    "--use-minibatch-kl-penalty"
+                    if use_minibatch_kl_penalty
+                    else "--use-minibatch-kl-penalty=no",
                     "--log-dir",
                     Out(
                         f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_use-minibatch-kl-penalty={use_minibatch_kl_penalty}_note=minibatch-kl3/"
@@ -631,7 +633,7 @@ elif HOST == "resl34":
             kl_loss_coeff_momentum = 0.9999
             n_steps = 4096
             note = "minibatch-kl4"
-            for use_minibatch_kl_penalty in [True, False]:
+            for minibatch_kl_penalty in [True, False]:
                 cmd(
                     "python",
                     "src/klpo_stbl_mujoco.py",
@@ -649,16 +651,18 @@ elif HOST == "resl34":
                     n_steps,
                     "--note",
                     note,
-                    "--reset-policy-optimizer",
-                    f"--use-minibatch-kl-penalty={use_minibatch_kl_penalty}",
+                    "--minibatch-kl-penalty=yes"
+                    if minibatch_kl_penalty
+                    else "--minibatch-kl-penalty=no",
                     "--log-dir",
                     Out(
-                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_use-minibatch-kl-penalty={use_minibatch_kl_penalty}_note={note}/"
+                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_minibatch-kl-penalty={minibatch_kl_penalty}_note={note}/"
                     ),
                     warmup_time=3,
                     ram_gb=ram_gb,
                     priority=(
                         51,
+                        minibatch_kl_penalty,
                         int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
                         seed,
                     ),
