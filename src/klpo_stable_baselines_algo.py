@@ -119,11 +119,11 @@ class KLPOStbl(OnPolicyAlgorithm):
         kl_loss_coeff_lr: float,
         kl_loss_coeff_momentum: float,
         kl_target_stat: str,
-        historic_buffer_size: int,
-        optimize_log_loss_coeff: bool,
-        reset_policy_optimizer: bool = False,
+        optimize_log_loss_coeff: bool = False,
+        reset_policy_optimizer: bool = True,
+        historic_buffer_size: int = 32_000,
         second_penalty_loop: bool = True,
-        minibatch_kl_penalty: bool = False,
+        minibatch_kl_penalty: bool = True,
     ):
 
         super().__init__(
@@ -302,11 +302,6 @@ class KLPOStbl(OnPolicyAlgorithm):
 
             # ratio between old and new policy, should be one at the first iteration
             ratio = th.exp(log_prob - rollout_data.old_log_prob)
-            full_batch_kl_div = kl_divergence(
-                Independent(full_batch_new_dist, 1),
-                Independent(full_batch_old_dist, 1),
-            )
-            kl_divs.append(full_batch_kl_div.mean().item())
 
             if self._minibatch_kl_penalty and use_pg_loss:
                 minibatch_new_dist = self.policy.get_distribution(
@@ -320,7 +315,14 @@ class KLPOStbl(OnPolicyAlgorithm):
                     Independent(minibatch_old_dist, 1),
                 )
             else:
+                # Don't accidentally use this code path
+                assert False, "Are you sure you meant to full batch kl div?"
+                full_batch_kl_div = kl_divergence(
+                    Independent(full_batch_new_dist, 1),
+                    Independent(full_batch_old_dist, 1),
+                )
                 kl_div = full_batch_kl_div
+            kl_divs.append(kl_div.mean().item())
 
             pg_loss = -(advantages * ratio).mean()
 
