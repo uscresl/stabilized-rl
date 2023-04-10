@@ -678,61 +678,75 @@ elif HOST == "stygian":
             # "button-press-topdown-v2",
             # "reach-v2",
         ]:
-            note = "historic_buffer_sweep"
+            note = "basline_ppo"
+            cmd(
+                "python",
+                "src/ppo_stbl_MT10.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--note",
+                note,
+                "--log-dir",
+                Out(f"PPO_stbl_MT10_baseline/env={env}_seed={seed}_note={note}/"),
+            )
+    for seed in seeds:
+        for env in [
+            "pick-place-v2",
+            # "window-open-v2",
+            # "button-press-topdown-v2",
+            # "reach-v2",
+        ]:
+            note = "tuned_xppo"
             optimize_log_loss_coeff = False
             second_penalty_loop = True
             reset_policy_optimizer = True
 
             kl_target_stat = "max"
             ent_coef = 0.0
-            for target_kl, kl_loss_coeff_lr, kl_loss_coeff_momentum in [
-                (2e-3, 3.0, 1.0),
-                (1.5e-3, 3.0, 1.0),
-                (2e-3, 8.0, 0.8),
-            ]:
-                for historic_buffer_size in [
-                    64_000,
-                    32_000,
-                    16_000,
-                ]:
-                    cmd(
-                        "python",
-                        "src/klpo_stbl_MT10.py",
-                        "--seed",
-                        seed,
-                        "--env",
-                        env,
-                        "--target-kl",
-                        target_kl,
-                        "--kl-target-stat",
-                        kl_target_stat,
-                        "--optimize-log-loss-coeff",
-                        optimize_log_loss_coeff,
-                        "--kl-loss-coeff-lr",
-                        kl_loss_coeff_lr,
-                        "--kl-loss-coeff-momentum",
-                        kl_loss_coeff_momentum,
-                        "--second-penalty-loop",
-                        second_penalty_loop,
-                        "--reset-policy-optimizer",
-                        reset_policy_optimizer,
-                        "--ent-coef",
-                        ent_coef,
-                        "--n-steps",
-                        4096,
-                        "--total-steps",
-                        3_000_000,
-                        "--historic-buffer-size",
-                        historic_buffer_size,
-                        "--note",
-                        note,
-                        "--log-dir",
-                        Out(
-                            f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_historic-buffer-size={historic_buffer_size}_note={note}/"
-                        ),
-                        warmup_time=3,
-                        ram_gb=ram_gb,
-                        priority=35,
-                    )
+            target_kl = 1.5e-3
+            kl_loss_coeff_lr = 3.0
+            kl_loss_coeff_momentum = 0.999
+            historic_buffer_size = 32_000
+            cmd(
+                "python",
+                "src/klpo_stbl_MT10.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--target-kl",
+                target_kl,
+                "--kl-target-stat",
+                kl_target_stat,
+                "--optimize-log-loss-coeff",
+                optimize_log_loss_coeff,
+                "--kl-loss-coeff-lr",
+                kl_loss_coeff_lr,
+                "--kl-loss-coeff-momentum",
+                kl_loss_coeff_momentum,
+                "--second-penalty-loop",
+                second_penalty_loop,
+                "--reset-policy-optimizer",
+                reset_policy_optimizer,
+                "--ent-coef",
+                ent_coef,
+                "--n-steps",
+                4096,
+                "--total-steps",
+                20_000_000,
+                "--historic-buffer-size",
+                historic_buffer_size,
+                "--note",
+                note,
+                "--log-dir",
+                Out(
+                    f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_historic-buffer-size={historic_buffer_size}_note={note}/"
+                ),
+                warmup_time=3,
+                ram_gb=ram_gb,
+                priority=35,
+            )
 # if random.randrange(100) == 0:
 #     plot_all_csvs.main()
