@@ -314,14 +314,16 @@ class KLPOStbl(OnPolicyAlgorithm):
                     Independent(minibatch_new_dist, 1),
                     Independent(minibatch_old_dist, 1),
                 )
-            else:
-                # Don't accidentally use this code path
-                assert False, "Are you sure you meant to full batch kl div?"
+            elif self._minibatch_kl_penalty and not use_pg_loss:
                 full_batch_kl_div = kl_divergence(
                     Independent(full_batch_new_dist, 1),
                     Independent(full_batch_old_dist, 1),
                 )
                 kl_div = full_batch_kl_div
+
+            else:
+                # Don't accidentally use this code path
+                assert False, "Are you sure you meant to full batch kl div?"
             kl_divs.append(kl_div.mean().item())
 
             pg_loss = -(advantages * ratio).mean()
