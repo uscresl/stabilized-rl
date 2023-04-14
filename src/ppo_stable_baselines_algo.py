@@ -206,7 +206,7 @@ class PPO(OnPolicyAlgorithm):
         clip_fractions = []
 
         continue_training = True
-
+        self._log_avg_episode_returns()
         # train for n_epochs epochs
         for epoch in range(self.n_epochs):
             approx_kl_divs = []
@@ -473,3 +473,14 @@ class PPO(OnPolicyAlgorithm):
         self._last_episode_starts = True
         self.logger.record("rollout/SuccessRate", n_successes / n_episodes)
         return True
+
+    def _log_avg_episode_returns(self):
+        eps_start_idx = np.where(self.rollout_buffer.episode_starts.flatten() == 1)[0]
+        returns = []
+
+        for i, start in enumerate(eps_start_idx[:-1]):  # only use full episodes
+            end_idx = eps_start_idx[i + 1]
+            returns.append(self.rollout_buffer.rewards[start:end_idx].sum())
+        avg_return = np.mean(returns)
+        self.logger.record("rollout/AverageReturn", avg_return)
+        self.logger.record("rollout/FullEpisodeCount", len(returns))

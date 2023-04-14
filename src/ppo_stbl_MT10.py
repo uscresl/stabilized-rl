@@ -30,13 +30,32 @@ def gen_env(env: str):
 def ppo_stbl_MT10(
     ctxt=None,
     total_steps: int = 20_000_000,
+    n_steps: int = 10_000,
+    batch_size=32,
+    gae_lambda: float = 1,
+    target_kl: float = 1.5e-3,
     note: str = "buffer_kl_loss",
     *,
     env: str,
     max_path_length: int,
     seed: int,
+    gamma: float,
+    n_epochs,
+    learning_rate,
 ):
-    model = PPO("MlpPolicy", env, seed=seed, max_path_length=max_path_length)
+    model = PPO(
+        "MlpPolicy",
+        env,
+        seed=seed,
+        n_steps=n_steps,
+        batch_size=batch_size,
+        gae_lambda=gae_lambda,
+        gamma=gamma,
+        target_kl=target_kl,
+        max_path_length=max_path_length,
+        n_epochs=n_epochs,
+        learning_rate=learning_rate,
+    )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
     model.set_logger(new_logger)
@@ -54,7 +73,14 @@ if __name__ == "__main__":
         seed: int,
         env: str,
         log_dir: str,
+        n_steps: int,
+        gamma: float,
         note: str,
+        learning_rate: float,
+        n_epochs: int,
+        batch_size=32,
+        gae_lambda: float = 1,
+        target_kl: float = 1.5e-3,
         total_steps: int = 20_000_000,
     ):
         env, max_path_length = gen_env(env)
@@ -62,6 +88,13 @@ if __name__ == "__main__":
             dict(log_dir=log_dir),
             seed=seed,
             env=env,
+            gamma=gamma,
+            n_steps=n_steps,
+            n_epochs=n_epochs,
+            learning_rate=learning_rate,
+            batch_size=batch_size,
+            gae_lambda=gae_lambda,
+            target_kl=target_kl,
             note=note,
             max_path_length=max_path_length,
             total_steps=total_steps,

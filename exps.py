@@ -670,7 +670,52 @@ elif HOST == "resl34":
 
 elif HOST == "stygian":
     GLOBAL_CONTEXT.max_concurrent_jobs = 3
-    ram_gb = 6
+    ram_gb = 9
+    # for seed in seeds:
+    #     for env in [
+    #         "pick-place-v2",
+    #         # "window-open-v2",
+    #         # "button-press-topdown-v2",
+    #         # "reach-v2",
+    #     ]:
+    #         total_steps: int = 20_000_000
+    #         n_steps = 50_000
+    #         gamma = 0.99
+    #         batch_size = 32
+    #         gae_lambda = 0.95
+    #         learning_rate = 5e-4
+    #         n_epochs = 10
+
+    #         note = "basline_ppo"
+    #         cmd(
+    #             "python",
+    #             "src/ppo_stbl_MT10.py",
+    #             "--seed",
+    #             seed,
+    #             "--env",
+    #             env,
+    #             "--total-steps",
+    #             total_steps,
+    #             "--n-steps",
+    #             n_steps,
+    #             "--gamma",
+    #             gamma,
+    #             "--batch-size",
+    #             batch_size,
+    #             "--gae-lambda",
+    #             gae_lambda,
+    #             "--learning-rate",
+    #             learning_rate,
+    #             "--n-epochs",
+    #             n_epochs,
+    #             "--note",
+    #             note,
+    #             "--log-dir",
+    #             Out(f"PPO_stbl_MT10_baseline/env={env}_seed={seed}_note={note}/"),
+    #             warmup_time=3,
+    #             ram_gb=ram_gb,
+    #             priority=(35, -seed),
+    #         )
     for seed in seeds:
         for env in [
             "pick-place-v2",
@@ -678,18 +723,33 @@ elif HOST == "stygian":
             # "button-press-topdown-v2",
             # "reach-v2",
         ]:
-            note = "basline_ppo"
+            total_steps: int = 20_000_000
+            batch_size = 50_000
+            center_adv = True
+            normalize_env = True
+            note = "basline_garage_ppo"
             cmd(
                 "python",
-                "src/ppo_stbl_MT10.py",
+                "src/ppo_MT10.py",
                 "--seed",
                 seed,
                 "--env",
                 env,
+                "--batch-size",
+                batch_size,
+                "--total-steps",
+                total_steps,
+                "--log-dir",
+                Out(f"PPO_garage_MT10_baseline/env={env}_seed={seed}_note={note}/"),
                 "--note",
                 note,
-                "--log-dir",
-                Out(f"PPO_stbl_MT10_baseline/env={env}_seed={seed}_note={note}/"),
+                "--center-adv",
+                center_adv,
+                "--normalize-env",
+                normalize_env,
+                warmup_time=3,
+                ram_gb=ram_gb,
+                priority=(-seed, 35),
             )
     for seed in seeds:
         for env in [
@@ -707,7 +767,7 @@ elif HOST == "stygian":
             ent_coef = 0.0
             target_kl = 1.5e-3
             kl_loss_coeff_lr = 3.0
-            kl_loss_coeff_momentum = 0.999
+            kl_loss_coeff_momentum = 0.99999
             historic_buffer_size = 32_000
             cmd(
                 "python",
@@ -746,7 +806,7 @@ elif HOST == "stygian":
                 ),
                 warmup_time=3,
                 ram_gb=ram_gb,
-                priority=35,
+                priority=(-seed, 36),
             )
 # if random.randrange(100) == 0:
 #     plot_all_csvs.main()
