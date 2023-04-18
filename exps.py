@@ -667,6 +667,40 @@ elif HOST == "resl34":
                         seed,
                     ),
                 )
+            note = "beta-adam-opt"
+            for kl_loss_coeff_lr in [0.1, 1.0, 2.0, 5.0]:
+                cmd(
+                    "python",
+                    "src/klpo_stbl_mujoco.py",
+                    "--seed",
+                    seed,
+                    "--env",
+                    env,
+                    "--target-kl",
+                    target_kl,
+                    "--kl-loss-coeff-lr",
+                    kl_loss_coeff_lr,
+                    "--kl-loss-coeff-momentum",
+                    kl_loss_coeff_momentum,
+                    "--n-steps",
+                    n_steps,
+                    "--note",
+                    note,
+                    "--minibatch-kl-penalty=yes",
+                    "--use-beta-adam=yes",
+                    "--log-dir",
+                    Out(
+                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_beta-adam-opt=True_note={note}/"
+                    ),
+                    warmup_time=3,
+                    ram_gb=ram_gb,
+                    priority=(
+                        51,
+                        int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
+                        seed,
+                        -int(kl_loss_coeff_lr),
+                    ),
+                )
 
 elif HOST == "stygian":
     GLOBAL_CONTEXT.max_concurrent_jobs = 3

@@ -26,6 +26,7 @@ def klpo_stbl(
     optimize_log_loss_coeff,
     reset_policy_optimizer,
     minibatch_kl_penalty,
+    use_beta_adam,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -44,6 +45,7 @@ def klpo_stbl(
         optimize_log_loss_coeff=optimize_log_loss_coeff,
         reset_policy_optimizer=reset_policy_optimizer,
         minibatch_kl_penalty=minibatch_kl_penalty,
+        use_beta_adam=use_beta_adam,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -69,6 +71,7 @@ if __name__ == "__main__":
         optimize_log_loss_coeff: bool = False,
         reset_policy_optimizer: bool = True,
         minibatch_kl_penalty: bool = False,
+        use_beta_adam: bool = False,
     ):
         assert isinstance(minibatch_kl_penalty, bool)
         assert isinstance(reset_policy_optimizer, bool)
@@ -87,4 +90,5 @@ if __name__ == "__main__":
             optimize_log_loss_coeff=optimize_log_loss_coeff,
             reset_policy_optimizer=reset_policy_optimizer,
             minibatch_kl_penalty=minibatch_kl_penalty,
+            use_beta_adam=use_beta_adam,
         )

@@ -124,6 +124,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         historic_buffer_size: int = 32_000,
         second_penalty_loop: bool = True,
         minibatch_kl_penalty: bool = True,
+        use_beta_adam: bool = False,
     ):
 
         super().__init__(
@@ -204,6 +205,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._reset_policy_optimizer = reset_policy_optimizer
         self._second_penalty_loop = second_penalty_loop
         self._minibatch_kl_penalty = minibatch_kl_penalty
+        self._use_beta_adam = use_beta_adam
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -259,11 +261,17 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.logger.record("buffer/rollout_buffer_len", self.rollout_buffer.pos)
 
         self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
-        kl_loss_coeff_opt = th.optim.SGD(
-            [self._kl_loss_coeff_param],
-            lr=self._kl_loss_coeff_lr,
-            momentum=self._kl_loss_coeff_momentum,
-        )
+        if self._use_beta_adam:
+            kl_loss_coeff_opt = th.optim.Adam(
+                [self._kl_loss_coeff_param],
+                lr=self._kl_loss_coeff_lr,
+            )
+        else:
+            kl_loss_coeff_opt = th.optim.SGD(
+                [self._kl_loss_coeff_param],
+                lr=self._kl_loss_coeff_lr,
+                momentum=self._kl_loss_coeff_momentum,
+            )
         kl_divs = []
 
         def minibatch_step(rollout_data, use_pg_loss):
