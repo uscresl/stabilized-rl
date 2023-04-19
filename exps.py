@@ -668,7 +668,7 @@ elif HOST == "resl34":
                     ),
                 )
             note = "beta-adam-opt"
-            for kl_loss_coeff_lr in [0.1, 1.0, 10.0, 100.0]:
+            for kl_loss_coeff_lr in [0.1, 5.0]:
                 cmd(
                     "python",
                     "src/klpo_stbl_mujoco.py",
@@ -695,13 +695,15 @@ elif HOST == "resl34":
                     warmup_time=3,
                     ram_gb=ram_gb,
                     priority=(
-                        51,
-                        int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
+                        52,
                         seed,
-                        -int(kl_loss_coeff_lr),
+                        -int(1000 * kl_loss_coeff_lr),
+                        int(env in ["HalfCheetah-v2"]),
+                        int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
                     ),
                 )
             note = "sparse-second-loop"
+            kl_loss_coeff_lr = 1.0
             cmd(
                 "python",
                 "src/klpo_stbl_mujoco.py",
@@ -728,9 +730,10 @@ elif HOST == "resl34":
                 warmup_time=3,
                 ram_gb=ram_gb,
                 priority=(
-                    52,
-                    int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
+                    51,
                     seed,
+                    int(env in ["HalfCheetah-v2"]),
+                    int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
                 ),
             )
 

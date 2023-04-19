@@ -450,18 +450,25 @@ class KLPOStbl(OnPolicyAlgorithm):
                     new_mask = historic_kl_div > self.target_kl
                     need_penalty_indices = need_penalty_indices.union(
                         set(new_mask.nonzero().flatten().tolist()))
-                    indices_list = list(need_penalty_indices)
-                    data = (
-                        self.historic_buffer.observations[indices_list],
-                        self.historic_buffer.actions[indices_list],
-                        self.historic_buffer.values[indices_list],
-                        self.historic_buffer.log_probs[indices_list],
-                        self.historic_buffer.advantages[indices_list],
-                        self.historic_buffer.returns[indices_list],
-                    )
-                    penalty_data = RolloutBufferSamples(*tuple(map(lambda d: self.historic_buffer.to_torch(d.squeeze(axis=1)), data)))
-                    kl_div = minibatch_step(rollout_data=penalty_data, use_pg_loss=False)
-                    second_penalty_batch_sizes.append(penalty_data.observations.shape[0])
+                    indices_array = np.array(list(need_penalty_indices))
+                    if len(indices_array) <= 0:
+                        break
+                    index_indices = np.random.permutation(len(indices_array))
+                    start_idx = 0
+                    while start_idx < len(indices_array):
+                        i_list = indices_array[index_indices[start_idx : start_idx + self.batch_size]]
+                        start_idx += self.batch_size
+                        data = (
+                            self.historic_buffer.observations[i_list],
+                            self.historic_buffer.actions[i_list],
+                            self.historic_buffer.values[i_list],
+                            self.historic_buffer.log_probs[i_list],
+                            self.historic_buffer.advantages[i_list],
+                            self.historic_buffer.returns[i_list],
+                        )
+                        penalty_data = RolloutBufferSamples(*tuple(map(lambda d: self.historic_buffer.to_torch(d.squeeze(axis=1)), data)))
+                        kl_div = minibatch_step(rollout_data=penalty_data, use_pg_loss=False)
+                        second_penalty_batch_sizes.append(len(indices_array))
                     penalty_loops += 1
             else:
                 while self._second_penalty_loop:
@@ -494,19 +501,21 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.logger.record("train/final_kl_div", kl_divs[-1])
         self.logger.record("train/final_max_kl_div", kl_div.max().item())
         self.logger.record("train/kl_div", np.mean(kl_divs))
-        self.logger.record("train/final_second_penalty_loops", second_penalty_loops[-1])
-        self.logger.record(
-            "train/mean_second_penalty_loops", np.mean(second_penalty_loops)
-        )
-        self.logger.record(
-            "train/max_second_penalty_loops", np.max(second_penalty_loops)
-        )
-        self.logger.record(
-            "train/mean_second_penalty_batch_sizes", np.mean(second_penalty_batch_sizes)
-        )
-        self.logger.record(
-            "train/max_second_penalty_batch_sizes", np.max(second_penalty_batch_sizes)
-        )
+        if second_penalty_loops:
+            self.logger.record("train/final_second_penalty_loops", second_penalty_loops[-1])
+            self.logger.record(
+                "train/mean_second_penalty_loops", np.mean(second_penalty_loops)
+            )
+            self.logger.record(
+                "train/max_second_penalty_loops", np.max(second_penalty_loops)
+            )
+        if second_penalty_batch_sizes:
+            self.logger.record(
+                "train/mean_second_penalty_batch_sizes", np.mean(second_penalty_batch_sizes)
+            )
+            self.logger.record(
+                "train/max_second_penalty_batch_sizes", np.max(second_penalty_batch_sizes)
+            )
         self.logger.record("train/clip_fraction", np.mean(clip_fractions))
         self.logger.record("train/advantages", batch_adv_mean)
         self.logger.record("train/explained_variance", explained_var)
