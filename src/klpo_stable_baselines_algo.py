@@ -208,6 +208,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._minibatch_kl_penalty = minibatch_kl_penalty
         self._use_beta_adam = use_beta_adam
         self._sparse_second_loop = sparse_second_loop
+        self._train_calls = 0
+        self._start_using_sparse_second_loop_at = 0
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -229,6 +231,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         """
         Update policy using the currently gathered rollout buffer.
         """
+        self._train_calls += 1
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)
         # Update optimizer learning rate
@@ -330,7 +333,6 @@ class KLPOStbl(OnPolicyAlgorithm):
                     Independent(full_batch_old_dist, 1),
                 )
                 kl_div = full_batch_kl_div
-
             else:
                 # Don't accidentally use this code path
                 assert False, "Are you sure you meant to full batch kl div?"
@@ -358,8 +360,7 @@ class KLPOStbl(OnPolicyAlgorithm):
             entropy_losses.append(entropy_loss.item())
 
             loss = pg_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
-            kl_loss = kl_div
-            kl_losses.append(kl_loss.mean().item())
+            kl_losses.append(kl_div.mean().item())
             if self._optimize_log_loss_coeff:
                 # Optimizing the log loss coeff, therefore need to take
                 # exp to get loss coeff
@@ -368,9 +369,17 @@ class KLPOStbl(OnPolicyAlgorithm):
                 loss_coeff_param = self._kl_loss_coeff_param
 
             if use_pg_loss:
-                loss += loss_coeff_param.detach() * kl_loss.mean()
+                loss += loss_coeff_param.detach() * kl_div.mean()
             else:
-                loss = loss_coeff_param.detach() * kl_loss.mean()
+                if self._sparse_second_loop:
+                    need_loss = (kl_div > self.target_kl)
+                    if need_loss.any():
+                        need_loss = need_loss.float() + MIN_KL_LOSS_COEFF
+                        loss = loss_coeff_param.detach() * ((kl_div * need_loss).sum() / need_loss.sum())
+                    else:
+                        return kl_div
+                else:
+                    loss = loss_coeff_param.detach() * kl_div.mean()
 
             # If optimizing the log loss coeff, then
             # self._kl_loss_coeff_param is the "log loss coeff"
@@ -428,47 +437,16 @@ class KLPOStbl(OnPolicyAlgorithm):
 
             penalty_loops = 0
             if self._sparse_second_loop:
-                need_penalty_indices = set()
-                while self._second_penalty_loop:
-                    with th.no_grad():
-                        historic_new_dist = self.policy.get_distribution(
-                            historic_obs
-                        ).distribution
-                        historic_old_dist = self._old_policy.get_distribution(
-                            historic_obs
-                        ).distribution
-                        historic_kl_div = kl_divergence(
-                            Independent(historic_new_dist, 1),
-                            Independent(historic_old_dist, 1),
-                        )
-                    if self._kl_target_stat == "mean":
-                        if historic_kl_div.mean() <= self.target_kl:
-                            break
-                    elif self._kl_target_stat == "max":
-                        if historic_kl_div.max() <= self.target_kl:
-                            break
-                    new_mask = historic_kl_div > self.target_kl
-                    need_penalty_indices = need_penalty_indices.union(
-                        set(new_mask.nonzero().flatten().tolist()))
-                    indices_array = np.array(list(need_penalty_indices))
-                    if len(indices_array) <= 0:
-                        break
-                    index_indices = np.random.permutation(len(indices_array))
-                    start_idx = 0
-                    while start_idx < len(indices_array):
-                        i_list = indices_array[index_indices[start_idx : start_idx + self.batch_size]]
-                        start_idx += self.batch_size
-                        data = (
-                            self.historic_buffer.observations[i_list],
-                            self.historic_buffer.actions[i_list],
-                            self.historic_buffer.values[i_list],
-                            self.historic_buffer.log_probs[i_list],
-                            self.historic_buffer.advantages[i_list],
-                            self.historic_buffer.returns[i_list],
-                        )
-                        penalty_data = RolloutBufferSamples(*tuple(map(lambda d: self.historic_buffer.to_torch(d.squeeze(axis=1)), data)))
-                        kl_div = minibatch_step(rollout_data=penalty_data, use_pg_loss=False)
-                        second_penalty_batch_sizes.append(len(indices_array))
+                second_loop_done = False
+                while self._second_penalty_loop and not second_loop_done:
+                    second_loop_done = True
+                    for historic_data in sample_partial_buffer(self.historic_buffer,
+                                                               self.batch_size):
+                        kl_div = minibatch_step(rollout_data=historic_data,
+                                                use_pg_loss=False)
+                        if (kl_div > self.target_kl).any():
+                            second_loop_done = False
+                        second_penalty_batch_sizes.append(len(historic_data))
                     penalty_loops += 1
             else:
                 while self._second_penalty_loop:
@@ -478,9 +456,11 @@ class KLPOStbl(OnPolicyAlgorithm):
                     elif self._kl_target_stat == "max":
                         if kl_div.max() <= self.target_kl:
                             break
-                    kl_div = minibatch_step(rollout_data=rollout_data, use_pg_loss=False)
-                    penalty_loops += 1
-                    second_penalty_batch_sizes.append(rollout_data.observations.shape[0])
+                    for historic_data in sample_partial_buffer(self.historic_buffer):
+                        # This rollout_data is not used to compute KL div
+                        kl_div = minibatch_step(rollout_data=historic_data, use_pg_loss=False)
+                        penalty_loops += 1
+                        second_penalty_batch_sizes.append(len(historic_data))
             second_penalty_loops.append(penalty_loops)
 
             if not continue_training:
@@ -720,3 +700,28 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._last_episode_starts = True
         self.logger.record("rollout/SuccessRate", n_successes / n_episodes)
         return True
+
+def sample_partial_buffer(buffer, batch_size: Optional[int] = None):
+    if buffer.full:
+        indices = np.random.permutation(buffer.buffer_size * buffer.n_envs)
+    else:
+        indices = np.random.permutation(buffer.pos * buffer.n_envs)
+
+    # Return everything, don't create minibatches
+    if batch_size is None:
+        batch_size = buffer.buffer_size * buffer.n_envs
+    assert batch_size is not None
+
+    start_idx = 0
+    while start_idx < len(indices):
+        batch_inds = indices[start_idx : start_idx + batch_size]
+        data = (
+            buffer.observations[batch_inds],
+            buffer.actions[batch_inds],
+            buffer.values[batch_inds],
+            buffer.log_probs[batch_inds],
+            buffer.advantages[batch_inds],
+            buffer.returns[batch_inds],
+        )
+        yield RolloutBufferSamples(*tuple([buffer.to_torch(d).squeeze(1) for d in data]))
+        start_idx += batch_size

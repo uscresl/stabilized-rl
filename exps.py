@@ -702,7 +702,7 @@ elif HOST == "resl34":
                         int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
                     ),
                 )
-            note = "sparse-second-loop"
+            note = "sparse-second-loop2"
             kl_loss_coeff_lr = 1.0
             cmd(
                 "python",
