@@ -374,7 +374,6 @@ class KLPOStbl(OnPolicyAlgorithm):
                 if self._sparse_second_loop:
                     need_loss = (kl_div > self.target_kl)
                     if need_loss.any():
-                        need_loss = need_loss.float() + MIN_KL_LOSS_COEFF
                         loss = loss_coeff_param.detach() * ((kl_div * need_loss).sum() / need_loss.sum())
                     else:
                         return kl_div
@@ -419,7 +418,7 @@ class KLPOStbl(OnPolicyAlgorithm):
             return kl_div
 
         second_penalty_loops = []
-        second_penalty_batch_sizes = []
+        second_penalty_skip_ratio = []
         # train for n_epochs epochs
         for epoch in range(self.n_epochs):
             # Do a complete pass on the rollout buffer
@@ -437,17 +436,20 @@ class KLPOStbl(OnPolicyAlgorithm):
 
             penalty_loops = 0
             if self._sparse_second_loop:
-                second_loop_done = False
-                while self._second_penalty_loop and not second_loop_done:
-                    second_loop_done = True
+                while self._second_penalty_loop:
+                    skipped_minibatches = 0
+                    total_minibatches = 0
                     for historic_data in sample_partial_buffer(self.historic_buffer,
                                                                self.batch_size):
+                        total_minibatches += 1
                         kl_div = minibatch_step(rollout_data=historic_data,
                                                 use_pg_loss=False)
-                        if (kl_div > self.target_kl).any():
-                            second_loop_done = False
-                        second_penalty_batch_sizes.append(len(historic_data))
+                        if (kl_div <= self.target_kl).all():
+                            skipped_minibatches += 1
+                    second_penalty_skip_ratio.append(skipped_minibatches / total_minibatches)
                     penalty_loops += 1
+                    if skipped_minibatches == total_minibatches:
+                        break
             else:
                 while self._second_penalty_loop:
                     if self._kl_target_stat == "mean":
@@ -460,7 +462,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                         # This rollout_data is not used to compute KL div
                         kl_div = minibatch_step(rollout_data=historic_data, use_pg_loss=False)
                         penalty_loops += 1
-                        second_penalty_batch_sizes.append(len(historic_data))
+                        second_penalty_skip_ratio.append(0)
             second_penalty_loops.append(penalty_loops)
 
             if not continue_training:
@@ -489,12 +491,15 @@ class KLPOStbl(OnPolicyAlgorithm):
             self.logger.record(
                 "train/max_second_penalty_loops", np.max(second_penalty_loops)
             )
-        if second_penalty_batch_sizes:
+        if second_penalty_skip_ratio:
             self.logger.record(
-                "train/mean_second_penalty_batch_sizes", np.mean(second_penalty_batch_sizes)
+                "train/mean_second_penalty_skip_ratio", np.mean(second_penalty_skip_ratio)
             )
             self.logger.record(
-                "train/max_second_penalty_batch_sizes", np.max(second_penalty_batch_sizes)
+                "train/max_second_penalty_skip_ratio", np.max(second_penalty_skip_ratio)
+            )
+            self.logger.record(
+                "train/min_second_penalty_skip_ratio", np.min(second_penalty_skip_ratio)
             )
         self.logger.record("train/clip_fraction", np.mean(clip_fractions))
         self.logger.record("train/advantages", batch_adv_mean)
