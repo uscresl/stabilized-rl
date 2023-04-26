@@ -96,7 +96,7 @@ elif HOST == "resl34":
                     ),
                 )
             note = "beta-adam-opt"
-            for kl_loss_coeff_lr in [5.0, 10.0]:
+            for kl_loss_coeff_lr in [3.0, 5.0, 10.0]:
                 cmd(
                     "python",
                     "src/klpo_stbl_mujoco.py",

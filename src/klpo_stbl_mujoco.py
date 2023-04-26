@@ -69,7 +69,7 @@ if __name__ == "__main__":
         target_kl: float,
         note: str,
         ent_coef: float = 0.0,
-        kl_loss_coeff_lr: float = 0.1,
+        kl_loss_coeff_lr: float = 3.0,
         kl_loss_coeff_momentum: float = 0.999,
         kl_target_stat: str = "max",
         n_steps: int = 4096,

@@ -125,7 +125,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         second_penalty_loop: bool = True,
         minibatch_kl_penalty: bool = True,
         use_beta_adam: bool = False,
-        sparse_second_loop: bool = False,
+        sparse_second_loop: bool = True,
         second_loop_batch_size: int = 6400,
     ):
 
