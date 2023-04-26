@@ -158,7 +158,7 @@ def interp_experiments(
         y = xy_no_nulls["y"]
         try:
             interp_y = np.interp(interp_x, x, y)
-        except NotImplementedError:
+        except (NotImplementedError, TypeError):
             raise InvalidDataError(filename=csv_path)
         interp_ys.append(interp_y)
     return interp_x, interp_ys

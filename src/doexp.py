@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Type, Union, List, Tuple
 import os
 import re
@@ -311,7 +311,9 @@ class Context:
                     f"{_cmd_name(running_cmd)}"
                 )
                 self.reserved_ram_gb -= running_cmd.ram_gb
-                running_cmd.ram_gb = ram_gb
+                # Can't assign fields on Cmd's, since they're frozen
+                self.running.remove(running_cmd)
+                self.running.append(replace(running_cmd, ram_gb=ram_gb))
                 self.reserved_ram_gb += running_cmd.ram_gb
             if gb_free < 0:
                 print(f"Terminating process: {_cmd_name(running_cmd)}")

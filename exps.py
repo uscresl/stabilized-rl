@@ -96,7 +96,7 @@ elif HOST == "resl34":
                     ),
                 )
             note = "beta-adam-opt"
-            for kl_loss_coeff_lr in [0.001, 0.1, 1.0, 5.0, 10.0]:
+            for kl_loss_coeff_lr in [5.0, 10.0]:
                 cmd(
                     "python",
                     "src/klpo_stbl_mujoco.py",
@@ -123,7 +123,7 @@ elif HOST == "resl34":
                     warmup_time=3,
                     ram_gb=ram_gb,
                     priority=(
-                        52 if kl_loss_coeff_lr in [0.1, 1.0, 5.0] else 51,
+                        51 + 2 * int(env in ["HalfCheetah-v2"] and kl_loss_coeff_lr == 5.0),
                         seed,
                         int(env in ["HalfCheetah-v2"]),
                     ),
@@ -156,10 +156,43 @@ elif HOST == "resl34":
                 warmup_time=3,
                 ram_gb=ram_gb,
                 priority=(
-                    52,
+                    50,
                     seed,
                     int(env in ["HalfCheetah-v2"]),
                     int(env in ["HalfCheetah-v2", "Walker2d-v2"]),
+                ),
+            )
+            note = "no-normalize-advantages"
+            cmd(
+                "python",
+                "src/klpo_stbl_mujoco.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--target-kl",
+                target_kl,
+                "--kl-loss-coeff-lr",
+                kl_loss_coeff_lr,
+                "--kl-loss-coeff-momentum",
+                kl_loss_coeff_momentum,
+                "--n-steps",
+                n_steps,
+                "--note",
+                note,
+                "--minibatch-kl-penalty=yes",
+                "--sparse-second-loop=yes",
+                "--normalize-advantage=no",
+                "--log-dir",
+                Out(
+                    f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
+                ),
+                warmup_time=3,
+                ram_gb=ram_gb,
+                priority=(
+                    52,
+                    int(env in ["HalfCheetah-v2"]),
+                    seed,
                 ),
             )
 

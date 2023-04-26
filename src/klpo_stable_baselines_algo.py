@@ -99,8 +99,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         gae_lambda: float = 0.95,
         clip_range: Union[float, Schedule] = 0.2,
         clip_range_vf: Union[None, float, Schedule] = None,
-        normalize_advantage: bool = True,
-        normalize_batch_advantage: bool = True,
+        normalize_advantage: bool = False,
+        normalize_batch_advantage: bool = False,
         ent_coef: float = 0.0,
         vf_coef: float = 0.5,
         max_grad_norm: float = 0.5,
@@ -126,6 +126,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         minibatch_kl_penalty: bool = True,
         use_beta_adam: bool = False,
         sparse_second_loop: bool = False,
+        second_loop_batch_size: int = 6400,
     ):
 
         super().__init__(
@@ -210,6 +211,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._sparse_second_loop = sparse_second_loop
         self._train_calls = 0
         self._start_using_sparse_second_loop_at = 0
+        self._second_loop_batch_size = second_loop_batch_size
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -422,9 +424,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         # train for n_epochs epochs
         for epoch in range(self.n_epochs):
             # Do a complete pass on the rollout buffer
-            if self.normalize_advantage and self._normalize_batch_advantage:
-                batch_adv_mean = self.rollout_buffer.advantages.mean()
-                batch_adv_std = self.rollout_buffer.advantages.std()
+            batch_adv_mean = self.rollout_buffer.advantages.mean()
+            batch_adv_std = self.rollout_buffer.advantages.std()
             # Save the current policy state and train
             self._old_policy.load_state_dict(self.policy.state_dict())
             if self._reset_policy_optimizer:
@@ -440,7 +441,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                     skipped_minibatches = 0
                     total_minibatches = 0
                     for historic_data in sample_partial_buffer(self.historic_buffer,
-                                                               self.batch_size):
+                                                               self._second_loop_batch_size):
                         total_minibatches += 1
                         kl_div = minibatch_step(rollout_data=historic_data,
                                                 use_pg_loss=False)

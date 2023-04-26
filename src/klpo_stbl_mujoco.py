@@ -1,6 +1,7 @@
 import clize
 
 from garage import wrap_experiment
+from torch import norm
 from klpo_stable_baselines_algo import KLPOStbl
 from stable_baselines3.common.logger import configure
 
@@ -28,6 +29,7 @@ def klpo_stbl(
     minibatch_kl_penalty,
     use_beta_adam,
     sparse_second_loop,
+    normalize_advantage,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -48,6 +50,7 @@ def klpo_stbl(
         minibatch_kl_penalty=minibatch_kl_penalty,
         use_beta_adam=use_beta_adam,
         sparse_second_loop=sparse_second_loop,
+        normalize_advantage=normalize_advantage,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -75,6 +78,7 @@ if __name__ == "__main__":
         minibatch_kl_penalty: bool = False,
         use_beta_adam: bool = False,
         sparse_second_loop: bool = False,
+        normalize_advantage: bool = False,
     ):
         assert isinstance(minibatch_kl_penalty, bool)
         assert isinstance(reset_policy_optimizer, bool)
@@ -95,4 +99,6 @@ if __name__ == "__main__":
             minibatch_kl_penalty=minibatch_kl_penalty,
             use_beta_adam=use_beta_adam,
             sparse_second_loop=sparse_second_loop,
+            normalize_advantage=normalize_advantage,
+            normalize_batch_advantage=normalize_advantage,
         )
