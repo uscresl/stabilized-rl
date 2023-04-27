@@ -36,14 +36,18 @@ def ppo_MT10(
     center_adv,
     total_steps,
     batch_size,
+    gae_lambda=0.95,
+    entropy_method="max",
+    policy_ent_coeff=0.01,
     normalize_env=True,
     use_vec_worker=False,
+    stop_entropy_gradient=False,
     note=None,
 ):
     set_seed(seed)
     env, max_path_length = gen_env(env)
     if normalize_env:
-        env = normalize(env, normalize_obs=True, normalize_reward=False)
+        env = normalize(env, normalize_obs=True, normalize_reward=True)
 
     trainer = Trainer(ctxt)
 
@@ -76,6 +80,10 @@ def ppo_MT10(
         discount=0.99,
         center_adv=center_adv,
         batch_size=batch_size,
+        entropy_method=entropy_method,
+        policy_ent_coeff=policy_ent_coeff,
+        gae_lambda=gae_lambda,
+        stop_entropy_gradient=stop_entropy_gradient,
     )
     n_epochs = total_steps // batch_size
     trainer.setup(algo, env)
@@ -95,6 +103,10 @@ if __name__ == "__main__":
         note: str,
         center_adv: bool,
         normalize_env: bool,
+        entropy_method: str,
+        policy_ent_coeff: float,
+        gae_lambda: float,
+        stop_entropy_gradient: bool,
         use_vec_worker: bool = False,
     ):
         ppo_MT10(
@@ -106,5 +118,9 @@ if __name__ == "__main__":
             center_adv=center_adv,
             normalize_env=normalize_env,
             use_vec_worker=use_vec_worker,
+            stop_entropy_gradient=stop_entropy_gradient,
             note=note,
+            entropy_method=entropy_method,
+            policy_ent_coeff=policy_ent_coeff,
+            gae_lambda=gae_lambda,
         )

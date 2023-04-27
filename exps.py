@@ -245,17 +245,20 @@ elif HOST == "stygian":
     #             priority=(35, -seed),
     #         )
     for seed in seeds:
-        for env in [
-            "pick-place-v2",
-            # "window-open-v2",
-            # "button-press-topdown-v2",
-            # "reach-v2",
+        for env, total_steps in [
+            ("pick-place-v2", 20_000_000),
+            # ("window-open-v2", 7_000_000),
+            # ("button-press-topdown-v2", 7_000_000),
+            # ("reach-v2", 7_000_000),
         ]:
-            total_steps: int = 20_000_000
             batch_size = 50_000
-            center_adv = True
+            center_adv = False
             normalize_env = True
-            note = "basline_garage_ppo"
+            gae_lambda = 0.95
+            note = "basline_garage_max_entropy_ppo"
+            entropy_method = "max"
+            policy_ent_coeff = 0.01
+            stop_entropy_gradient = True
             cmd(
                 "python",
                 "src/ppo_MT10.py",
@@ -267,6 +270,14 @@ elif HOST == "stygian":
                 batch_size,
                 "--total-steps",
                 total_steps,
+                "--entropy-method",
+                entropy_method,
+                "--policy-ent-coeff",
+                policy_ent_coeff,
+                "--stop-entropy-gradient",
+                stop_entropy_gradient,
+                "--gae-lambda",
+                gae_lambda,
                 "--log-dir",
                 Out(f"PPO_garage_MT10_baseline/env={env}_seed={seed}_note={note}/"),
                 "--note",
@@ -277,14 +288,14 @@ elif HOST == "stygian":
                 normalize_env,
                 warmup_time=3,
                 ram_gb=ram_gb,
-                priority=(-seed, 35),
+                priority=(-seed, 37),
             )
     for seed in seeds:
-        for env in [
-            "pick-place-v2",
-            # "window-open-v2",
-            # "button-press-topdown-v2",
-            # "reach-v2",
+        for env, total_steps in [
+            ("pick-place-v2", 20_000_000),
+            # ("window-open-v2", 7_000_000),
+            # ("button-press-topdown-v2", 7_000_000),
+            # ("reach-v2", 7_000_000),
         ]:
             note = "tuned_xppo"
             optimize_log_loss_coeff = False
@@ -323,7 +334,7 @@ elif HOST == "stygian":
                 "--n-steps",
                 4096,
                 "--total-steps",
-                20_000_000,
+                total_steps,
                 "--historic-buffer-size",
                 historic_buffer_size,
                 "--note",
@@ -336,5 +347,6 @@ elif HOST == "stygian":
                 ram_gb=ram_gb,
                 priority=(-seed, 36),
             )
+    for seed in seeds:
 # if random.randrange(100) == 0:
 #     plot_all_csvs.main()
