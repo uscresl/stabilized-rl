@@ -347,6 +347,5 @@ elif HOST == "stygian":
                 ram_gb=ram_gb,
                 priority=(-seed, 36),
             )
-    for seed in seeds:
 # if random.randrange(100) == 0:
 #     plot_all_csvs.main()
