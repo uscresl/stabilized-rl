@@ -366,7 +366,7 @@ elif HOST == "stygian":
             note = "xppo_transfer_exp"
             optimize_log_loss_coeff = False
             second_penalty_loop = True
-            reset_policy_optimizer = True
+            reset_optimizers = True
 
             kl_target_stat = "max"
             ent_coef = 0.0
@@ -394,7 +394,7 @@ elif HOST == "stygian":
                 "--second-penalty-loop",
                 second_penalty_loop,
                 "--reset-policy-optimizer",
-                reset_policy_optimizer,
+                reset_optimizers,
                 "--ent-coef",
                 ent_coef,
                 "--n-steps",

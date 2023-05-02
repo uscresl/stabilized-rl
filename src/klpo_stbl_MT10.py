@@ -46,7 +46,7 @@ def klpo_stbl_MT10(
     max_path_length: int,
     optimize_log_loss_coeff: bool,
     historic_buffer_size: int,
-    reset_policy_optimizer: bool,
+    reset_optimizers: bool,
     second_penalty_loop: bool,
 ):
     model = KLPOStbl(
@@ -66,7 +66,7 @@ def klpo_stbl_MT10(
         max_path_length=max_path_length,
         optimize_log_loss_coeff=optimize_log_loss_coeff,
         historic_buffer_size=historic_buffer_size,
-        reset_policy_optimizer=reset_policy_optimizer,
+        reset_optimizers=reset_optimizers,
         second_penalty_loop=second_penalty_loop,
     )
 
@@ -96,7 +96,7 @@ if __name__ == "__main__":
         kl_target_stat: str = "mean",
         n_steps: int = 4096,
         total_steps: int = 3_000_000,
-        reset_policy_optimizer: bool,
+        reset_optimizers: bool,
         second_penalty_loop: bool,
     ):
         env, max_path_length = gen_env(env)
@@ -115,6 +115,6 @@ if __name__ == "__main__":
             max_path_length=max_path_length,
             total_steps=total_steps,
             historic_buffer_size=historic_buffer_size,
-            reset_policy_optimizer=reset_policy_optimizer,
+            reset_optimizers=reset_optimizers,
             second_penalty_loop=second_penalty_loop,
         )
