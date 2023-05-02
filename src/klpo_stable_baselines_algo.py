@@ -120,11 +120,11 @@ class KLPOStbl(OnPolicyAlgorithm):
         kl_loss_coeff_momentum: float,
         kl_target_stat: str,
         optimize_log_loss_coeff: bool = False,
-        reset_policy_optimizer: bool = True,
+        reset_optimizers: bool = True,
         historic_buffer_size: int = 32_000,
         second_penalty_loop: bool = True,
         minibatch_kl_penalty: bool = True,
-        use_beta_adam: bool = False,
+        use_beta_adam: bool = True,
         sparse_second_loop: bool = True,
         second_loop_batch_size: int = 6400,
     ):
@@ -204,7 +204,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         assert kl_target_stat in ["mean", "max"]
         self._kl_target_stat = kl_target_stat
         self._initial_policy_opt_state_dict = self.policy.optimizer.state_dict()
-        self._reset_policy_optimizer = reset_policy_optimizer
+        self._reset_optimizers = reset_optimizers
         self._second_penalty_loop = second_penalty_loop
         self._minibatch_kl_penalty = minibatch_kl_penalty
         self._use_beta_adam = use_beta_adam
@@ -212,6 +212,19 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._train_calls = 0
         self._start_using_sparse_second_loop_at = 0
         self._second_loop_batch_size = second_loop_batch_size
+        self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
+        if self._use_beta_adam:
+            self._kl_loss_coeff_opt = th.optim.Adam(
+                [self._kl_loss_coeff_param],
+                lr=self._kl_loss_coeff_lr,
+            )
+        else:
+            self._kl_loss_coeff_opt = th.optim.SGD(
+                [self._kl_loss_coeff_param],
+                lr=self._kl_loss_coeff_lr,
+                momentum=self._kl_loss_coeff_momentum,
+            )
+        self._initial_kl_loss_coeff_state_dict = self._kl_loss_coeff_opt.state_dict()
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -267,18 +280,10 @@ class KLPOStbl(OnPolicyAlgorithm):
         )
         self.logger.record("buffer/rollout_buffer_len", self.rollout_buffer.pos)
 
-        self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
-        if self._use_beta_adam:
-            kl_loss_coeff_opt = th.optim.Adam(
-                [self._kl_loss_coeff_param],
-                lr=self._kl_loss_coeff_lr,
-            )
-        else:
-            kl_loss_coeff_opt = th.optim.SGD(
-                [self._kl_loss_coeff_param],
-                lr=self._kl_loss_coeff_lr,
-                momentum=self._kl_loss_coeff_momentum,
-            )
+        if self._reset_optimizers:
+            with th.no_grad():
+                self._kl_loss_coeff_param.copy_(1.0)
+            self._kl_loss_coeff_opt.load_state_dict(self._initial_kl_loss_coeff_state_dict)
         kl_divs = []
 
         def minibatch_step(rollout_data, use_pg_loss):
@@ -290,11 +295,6 @@ class KLPOStbl(OnPolicyAlgorithm):
             # Re-sample the noise matrix because the log_std has changed
             if self.use_sde:
                 self.policy.reset_noise(self.batch_size)
-
-            with th.no_grad():
-                full_batch_old_dist = self._old_policy.get_distribution(
-                    historic_obs
-                ).distribution
 
             full_batch_new_dist = self.policy.get_distribution(
                 historic_obs
@@ -394,7 +394,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                 )
             else:
                 raise ValueError("Invalid kl_target_stat")
-            kl_loss_coeff_opt.zero_grad()
+            self._kl_loss_coeff_opt.zero_grad()
 
             # Optimization step
             self.policy.optimizer.zero_grad()
@@ -405,7 +405,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                     self.policy.parameters(), self.max_grad_norm
                 )
             self.policy.optimizer.step()
-            kl_loss_coeff_opt.step()
+            self._kl_loss_coeff_opt.step()
             if self._optimize_log_loss_coeff:
                 if self._kl_loss_coeff_param < 1 + MIN_KL_LOSS_COEFF:
                     with th.no_grad():
@@ -428,7 +428,13 @@ class KLPOStbl(OnPolicyAlgorithm):
             batch_adv_std = self.rollout_buffer.advantages.std()
             # Save the current policy state and train
             self._old_policy.load_state_dict(self.policy.state_dict())
-            if self._reset_policy_optimizer:
+
+            with th.no_grad():
+                full_batch_old_dist = self._old_policy.get_distribution(
+                    historic_obs
+                ).distribution
+
+            if self._reset_optimizers:
                 self.policy.optimizer.load_state_dict(
                     self._initial_policy_opt_state_dict
                 )
