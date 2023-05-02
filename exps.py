@@ -123,7 +123,9 @@ elif HOST == "resl34":
                     warmup_time=3,
                     ram_gb=ram_gb,
                     priority=(
-                        51 + 2 * int(env in ["HalfCheetah-v2"] and kl_loss_coeff_lr == 5.0),
+                        51
+                        + 2
+                        * int(env in ["HalfCheetah-v2"] and kl_loss_coeff_lr == 5.0),
                         seed,
                         int(env in ["HalfCheetah-v2"]),
                     ),
@@ -244,60 +246,122 @@ elif HOST == "stygian":
     #             ram_gb=ram_gb,
     #             priority=(35, -seed),
     #         )
+    # for seed in seeds:
+    #     for env, total_steps in [
+    #         ("pick-place-v2", 20_000_000),
+    #         # ("window-open-v2", 7_000_000),
+    #         # ("button-press-topdown-v2", 7_000_000),
+    #         # ("reach-v2", 7_000_000),
+    #     ]:
+    #         batch_size = 50_000
+    #         center_adv = False
+    #         normalize_env = True
+    #         gae_lambda = 0.95
+    #         note = "basline_garage_max_entropy_ppo"
+    #         entropy_method = "max"
+    #         policy_ent_coeff = 0.01
+    #         stop_entropy_gradient = True
+    #         cmd(
+    #             "python",
+    #             "src/ppo_MT10.py",
+    #             "--seed",
+    #             seed,
+    #             "--env",
+    #             env,
+    #             "--batch-size",
+    #             batch_size,
+    #             "--total-steps",
+    #             total_steps,
+    #             "--entropy-method",
+    #             entropy_method,
+    #             "--policy-ent-coeff",
+    #             policy_ent_coeff,
+    #             "--stop-entropy-gradient",
+    #             stop_entropy_gradient,
+    #             "--gae-lambda",
+    #             gae_lambda,
+    #             "--log-dir",
+    #             Out(f"PPO_garage_MT10_baseline/env={env}_seed={seed}_note={note}/"),
+    #             "--note",
+    #             note,
+    #             "--center-adv",
+    #             center_adv,
+    #             "--normalize-env",
+    #             normalize_env,
+    #             warmup_time=3,
+    #             ram_gb=ram_gb,
+    #             priority=(-seed, 37),
+    #         )
+    # for seed in seeds:
+    #     for env, total_steps in [
+    #         ("pick-place-v2", 20_000_000),
+    #         # ("window-open-v2", 7_000_000),
+    #         # ("button-press-topdown-v2", 7_000_000),
+    #         # ("reach-v2", 7_000_000),
+    #     ]:
+    #         note = "tuned_xppo"
+    #         optimize_log_loss_coeff = False
+    #         second_penalty_loop = True
+    #         reset_policy_optimizer = True
+
+    #         kl_target_stat = "max"
+    #         ent_coef = 0.0
+    #         target_kl = 1.5e-3
+    #         kl_loss_coeff_lr = 3.0
+    #         kl_loss_coeff_momentum = 0.99999
+    #         historic_buffer_size = 32_000
+    #         cmd(
+    #             "python",
+    #             "src/klpo_stbl_MT10.py",
+    #             "--seed",
+    #             seed,
+    #             "--env",
+    #             env,
+    #             "--target-kl",
+    #             target_kl,
+    #             "--kl-target-stat",
+    #             kl_target_stat,
+    #             "--optimize-log-loss-coeff",
+    #             optimize_log_loss_coeff,
+    #             "--kl-loss-coeff-lr",
+    #             kl_loss_coeff_lr,
+    #             "--kl-loss-coeff-momentum",
+    #             kl_loss_coeff_momentum,
+    #             "--second-penalty-loop",
+    #             second_penalty_loop,
+    #             "--reset-policy-optimizer",
+    #             reset_policy_optimizer,
+    #             "--ent-coef",
+    #             ent_coef,
+    #             "--n-steps",
+    #             4096,
+    #             "--total-steps",
+    #             total_steps,
+    #             "--historic-buffer-size",
+    #             historic_buffer_size,
+    #             "--note",
+    #             note,
+    #             "--log-dir",
+    #             Out(
+    #                 f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_historic-buffer-size={historic_buffer_size}_note={note}/"
+    #             ),
+    #             warmup_time=3,
+    #             ram_gb=ram_gb,
+    #             priority=(-seed, 36),
+    #         )
     for seed in seeds:
         for env, total_steps in [
-            ("pick-place-v2", 20_000_000),
-            # ("window-open-v2", 7_000_000),
-            # ("button-press-topdown-v2", 7_000_000),
-            # ("reach-v2", 7_000_000),
-        ]:
-            batch_size = 50_000
-            center_adv = False
-            normalize_env = True
-            gae_lambda = 0.95
-            note = "basline_garage_max_entropy_ppo"
-            entropy_method = "max"
-            policy_ent_coeff = 0.01
-            stop_entropy_gradient = True
-            cmd(
-                "python",
-                "src/ppo_MT10.py",
-                "--seed",
-                seed,
-                "--env",
-                env,
-                "--batch-size",
-                batch_size,
-                "--total-steps",
-                total_steps,
-                "--entropy-method",
-                entropy_method,
-                "--policy-ent-coeff",
-                policy_ent_coeff,
-                "--stop-entropy-gradient",
-                stop_entropy_gradient,
-                "--gae-lambda",
-                gae_lambda,
-                "--log-dir",
-                Out(f"PPO_garage_MT10_baseline/env={env}_seed={seed}_note={note}/"),
-                "--note",
-                note,
-                "--center-adv",
-                center_adv,
-                "--normalize-env",
-                normalize_env,
-                warmup_time=3,
-                ram_gb=ram_gb,
-                priority=(-seed, 37),
-            )
-    for seed in seeds:
-        for env, total_steps in [
-            ("pick-place-v2", 20_000_000),
-            # ("window-open-v2", 7_000_000),
-            # ("button-press-topdown-v2", 7_000_000),
-            # ("reach-v2", 7_000_000),
-        ]:
-            note = "tuned_xppo"
+            ("reach-v2", 7_000_000),
+            ("push-v2", 7_000_000),
+            ("door-open-v2", 7_000_000),
+            ("drawer-open-v2", 7_000_000),
+            ("drawer-close-v2", 7_000_000),
+            ("button-press-topdown-v2", 7_000_000),
+            ("peg-insert-side-v2", 7_000_000),
+            ("window-open-v2", 7_000_000),
+            ("window-close-v2", 7_000_000),
+         ]:
+            note = "xppo_transfer_exp"
             optimize_log_loss_coeff = False
             second_penalty_loop = True
             reset_policy_optimizer = True
@@ -310,7 +374,7 @@ elif HOST == "stygian":
             historic_buffer_size = 32_000
             cmd(
                 "python",
-                "src/klpo_stbl_MT10.py",
+                "src/xppo_transfer_MT10.py",
                 "--seed",
                 seed,
                 "--env",
@@ -341,7 +405,7 @@ elif HOST == "stygian":
                 note,
                 "--log-dir",
                 Out(
-                    f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_historic-buffer-size={historic_buffer_size}_note={note}/"
+                    f"MT_10_transfer_exp/env={env}_seed={seed}_target-kl={target_kl}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_historic-buffer-size={historic_buffer_size}_note={note}/"
                 ),
                 warmup_time=3,
                 ram_gb=ram_gb,
