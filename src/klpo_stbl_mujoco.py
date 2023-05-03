@@ -34,6 +34,7 @@ def klpo_stbl(
     second_loop_batch_size,
     second_penalty_loop,
     historic_buffer_size,
+    second_loop_vf,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -59,6 +60,7 @@ def klpo_stbl(
         second_loop_batch_size=second_loop_batch_size,
         second_penalty_loop=second_penalty_loop,
         historic_buffer_size=historic_buffer_size,
+        second_loop_vf=second_loop_vf,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -92,6 +94,7 @@ if __name__ == "__main__":
         total_steps: int=3_000_000,
         second_loop_batch_size: int=16000,
         historic_buffer_size: int = 32000,
+        second_loop_vf: bool = False,
     ):
         klpo_stbl(
             dict(log_dir=log_dir),
@@ -116,4 +119,5 @@ if __name__ == "__main__":
             second_loop_batch_size=second_loop_batch_size,
             second_penalty_loop=second_penalty_loop,
             historic_buffer_size=historic_buffer_size,
+            second_loop_vf=second_loop_vf,
         )

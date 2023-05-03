@@ -199,6 +199,34 @@ elif HOST == "resl34":
                     seed,
                 ),
             )
+            note = "second-loop-vf"
+            cmd(
+                "python",
+                "src/klpo_stbl_mujoco.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--target-kl",
+                target_kl,
+                "--kl-loss-coeff-lr",
+                kl_loss_coeff_lr,
+                "--n-steps",
+                n_steps,
+                "--note",
+                note,
+                "--second-loop-vf=yes",
+                "--log-dir",
+                Out(
+                    f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
+                ),
+                warmup_time=3,
+                ram_gb=ram_gb,
+                priority=(
+                    61,
+                    seed,
+                ),
+            )
 
 elif HOST == "stygian":
     GLOBAL_CONTEXT.max_concurrent_jobs = 3

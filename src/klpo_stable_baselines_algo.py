@@ -127,6 +127,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         use_beta_adam: bool = True,
         sparse_second_loop: bool = True,
         second_loop_batch_size: int = 6400,
+        second_loop_vf: bool = False,
     ):
 
         super().__init__(
@@ -213,6 +214,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._start_using_sparse_second_loop_at = 0
         self._second_loop_batch_size = second_loop_batch_size
         self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
+        self._second_loop_vf = second_loop_vf
         if self._use_beta_adam:
             self._kl_loss_coeff_opt = th.optim.Adam(
                 [self._kl_loss_coeff_param],
@@ -373,10 +375,25 @@ class KLPOStbl(OnPolicyAlgorithm):
             if use_pg_loss:
                 loss += loss_coeff_param.detach() * kl_div.mean()
             else:
+                loss = th.tensor(0.).to(self.device)
+                if self._second_loop_vf:
+                    for r_data in sample_partial_buffer(self.rollout_buffer):
+                        acts = r_data.actions
+                        if isinstance(self.action_space, spaces.Discrete):
+                            # Convert discrete action from float to long
+                            acts = r_data.actions.long().flatten()
+                        values, _, _ = self.policy.evaluate_actions(
+                            r_data.observations, acts
+                        )
+                        values_pred = values
+                        # Value loss using the TD(gae_lambda) target
+                        value_loss = F.mse_loss(r_data.returns, values_pred)
+                        value_losses.append(value_loss.item())
+                        loss += value_loss
                 if self._sparse_second_loop:
                     need_loss = (kl_div > self.target_kl)
                     if need_loss.any():
-                        loss = loss_coeff_param.detach() * ((kl_div * need_loss).sum() / need_loss.sum())
+                        loss += loss_coeff_param.detach() * ((kl_div * need_loss).sum() / need_loss.sum())
                     else:
                         return kl_div
                 else:
