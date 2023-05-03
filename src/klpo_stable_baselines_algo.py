@@ -27,6 +27,8 @@ from torch.distributions.independent import Independent
 from torch.nn import functional as F
 
 MIN_KL_LOSS_COEFF = 1e-2
+MAX_KL_LOSS_COEFF = 1024
+MAX_LOG_KL_LOSS_COEFF = 10
 
 
 class KLPOStbl(OnPolicyAlgorithm):
@@ -199,7 +201,6 @@ class KLPOStbl(OnPolicyAlgorithm):
             self.max_path_length = max_path_length
 
         self._optimize_log_loss_coeff = optimize_log_loss_coeff
-        self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
         self._kl_loss_coeff_lr = kl_loss_coeff_lr
         self._kl_loss_coeff_momentum = kl_loss_coeff_momentum
         assert kl_target_stat in ["mean", "max"]
@@ -428,11 +429,17 @@ class KLPOStbl(OnPolicyAlgorithm):
                     with th.no_grad():
                         self._kl_loss_coeff_param.copy_(1 + MIN_KL_LOSS_COEFF)
                     assert self._kl_loss_coeff_param >= 1 + MIN_KL_LOSS_COEFF
+                elif self._kl_loss_coeff_param > MAX_LOG_KL_LOSS_COEFF:
+                    with th.no_grad():
+                        self._kl_loss_coeff_param.copy_(MAX_LOG_KL_LOSS_COEFF)
             else:
                 if self._kl_loss_coeff_param < MIN_KL_LOSS_COEFF:
                     with th.no_grad():
                         self._kl_loss_coeff_param.copy_(MIN_KL_LOSS_COEFF)
                     assert self._kl_loss_coeff_param >= MIN_KL_LOSS_COEFF
+                elif self._kl_loss_coeff_param > MAX_KL_LOSS_COEFF:
+                    with th.no_grad():
+                        self._kl_loss_coeff_param.copy_(MAX_KL_LOSS_COEFF)
             kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
             return kl_div
 
@@ -469,6 +476,8 @@ class KLPOStbl(OnPolicyAlgorithm):
                         kl_div = minibatch_step(rollout_data=historic_data,
                                                 use_pg_loss=False)
                         if (kl_div <= self.target_kl).all():
+                            skipped_minibatches += 1
+                        elif self._kl_target_stat == "mean" and kl_div.mean() <= self.target_kl:
                             skipped_minibatches += 1
                     second_penalty_skip_ratio.append(skipped_minibatches / total_minibatches)
                     penalty_loops += 1
