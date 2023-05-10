@@ -48,6 +48,8 @@ def klpo_stbl_MT10(
     historic_buffer_size: int,
     reset_optimizers: bool,
     second_penalty_loop: bool,
+    second_loop_batch_size: int,
+    batch_size: int,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -68,6 +70,8 @@ def klpo_stbl_MT10(
         historic_buffer_size=historic_buffer_size,
         reset_optimizers=reset_optimizers,
         second_penalty_loop=second_penalty_loop,
+        second_loop_batch_size=second_loop_batch_size,
+        batch_size=batch_size,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -96,6 +100,8 @@ if __name__ == "__main__":
         kl_target_stat: str = "mean",
         n_steps: int = 4096,
         total_steps: int = 3_000_000,
+        batch_size=256,
+        second_loop_batch_size=16_000,
         reset_optimizers: bool,
         second_penalty_loop: bool,
     ):
@@ -117,4 +123,6 @@ if __name__ == "__main__":
             historic_buffer_size=historic_buffer_size,
             reset_optimizers=reset_optimizers,
             second_penalty_loop=second_penalty_loop,
+            batch_size=batch_size,
+            second_loop_batch_size=second_loop_batch_size,
         )

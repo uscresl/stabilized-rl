@@ -405,23 +405,25 @@ elif HOST == "stygian":
     #             priority=(-seed, 37),
     #         )
     # for seed in seeds:
-    #     for env, total_steps in [
-    #         ("pick-place-v2", 20_000_000),
+    #     for env, total_steps, target_kl in [
+    #         # ("pick-place-v2", 20_000_000),
     #         # ("window-open-v2", 7_000_000),
     #         # ("button-press-topdown-v2", 7_000_000),
     #         # ("reach-v2", 7_000_000),
+    #         ("push-v2", 20_000_000, 0.75e-3),
     #     ]:
     #         note = "tuned_xppo"
     #         optimize_log_loss_coeff = False
     #         second_penalty_loop = True
-    #         reset_policy_optimizer = True
+    #         reset_optimizers = True
 
     #         kl_target_stat = "max"
     #         ent_coef = 0.0
-    #         target_kl = 1.5e-3
-    #         kl_loss_coeff_lr = 3.0
+    #         kl_loss_coeff_lr = 5.0
     #         kl_loss_coeff_momentum = 0.99999
     #         historic_buffer_size = 32_000
+    #         second_loop_batch_size = 16_000
+    #         batch_size = 256
     #         cmd(
     #             "python",
     #             "src/klpo_stbl_MT10.py",
@@ -441,10 +443,14 @@ elif HOST == "stygian":
     #             kl_loss_coeff_momentum,
     #             "--second-penalty-loop",
     #             second_penalty_loop,
-    #             "--reset-policy-optimizer",
-    #             reset_policy_optimizer,
+    #             "--reset-optimizers",
+    #             reset_optimizers,
     #             "--ent-coef",
     #             ent_coef,
+    #             "--second-loop-batch-size",
+    #             second_loop_batch_size,
+    #             "--batch-size",
+    #             batch_size,
     #             "--n-steps",
     #             4096,
     #             "--total-steps",
