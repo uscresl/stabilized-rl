@@ -13,6 +13,7 @@ from metaworld.envs.mujoco.env_dict import MT10_V2
 import os
 
 SAVED_PICK_PLACE_MODEL_PATH = "./data/experiments/tmp/MT_10_klpo_stbl/env=pick-place-v2_seed=5555_target-kl=0.0015_kl-loss-coeff-lr=3.0_kl-loss-coeff-momentum=0.99999_historic-buffer-size=32000_note=tuned_xppo/saved_model.zip"
+SAVED_PICK_PLACE_WINDOW_OPEN = "./data/experiments/tmp/MT_10_klpo_stbl/env=window-open-v2_seed=3333_target-kl=0.0015_kl-loss-coeff-lr=3.0_kl-loss-coeff-momentum=0.99999_historic-buffer-size=32000_note=tuned_xppo/saved_model.zip"
 
 
 def gen_env(env: str):
@@ -48,7 +49,7 @@ def xppo_tranfer_MT10(
     max_path_length: int,
     optimize_log_loss_coeff: bool,
     historic_buffer_size: int,
-    reset_policy_optimizer: bool,
+    reset_optimizers: bool,
     second_penalty_loop: bool,
 ):
     model = KLPOStbl(
@@ -68,10 +69,12 @@ def xppo_tranfer_MT10(
         max_path_length=max_path_length,
         optimize_log_loss_coeff=optimize_log_loss_coeff,
         historic_buffer_size=historic_buffer_size,
-        reset_policy_optimizer=reset_policy_optimizer,
+        reset_optimizers=reset_optimizers,
         second_penalty_loop=second_penalty_loop,
     )
-    model.set_parameters(SAVED_PICK_PLACE_MODEL_PATH)
+    random_value_net_sd = model.policy.value_net.state_dict()
+    model.set_parameters(SAVED_PICK_PLACE_WINDOW_OPEN)
+    model.policy.value_net.load_state_dict(random_value_net_sd)
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
     model.set_logger(new_logger)
     model.learn(total_steps)
@@ -98,7 +101,7 @@ if __name__ == "__main__":
         kl_target_stat: str = "mean",
         n_steps: int = 4096,
         total_steps: int = 3_000_000,
-        reset_policy_optimizer: bool,
+        reset_optimizers: bool,
         second_penalty_loop: bool,
     ):
         env, max_path_length = gen_env(env)
@@ -117,6 +120,6 @@ if __name__ == "__main__":
             max_path_length=max_path_length,
             total_steps=total_steps,
             historic_buffer_size=historic_buffer_size,
-            reset_policy_optimizer=reset_policy_optimizer,
+            reset_optimizers=reset_optimizers,
             second_penalty_loop=second_penalty_loop,
         )
