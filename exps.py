@@ -15,7 +15,7 @@ if HOST == "brain.usc.edu":
     GLOBAL_CONTEXT.max_concurrent_jobs = 8
 
 mujoco_envs = [
-    #"InvertedDoublePendulum-v2",
+    # "InvertedDoublePendulum-v2",
     "HalfCheetah-v2",
     "Hopper-v2",
     "Walker2d-v2",
@@ -313,51 +313,51 @@ elif HOST == "resl34":
 elif HOST == "stygian":
     GLOBAL_CONTEXT.max_concurrent_jobs = 3
     ram_gb = 9
-    # for seed in seeds:
-    #     for env in [
-    #         "pick-place-v2",
-    #         # "window-open-v2",
-    #         # "button-press-topdown-v2",
-    #         # "reach-v2",
-    #     ]:
-    #         total_steps: int = 20_000_000
-    #         n_steps = 50_000
-    #         gamma = 0.99
-    #         batch_size = 32
-    #         gae_lambda = 0.95
-    #         learning_rate = 5e-4
-    #         n_epochs = 10
+    for seed in seeds:
+        for env in [
+            "pick-place-v2",
+            # "window-open-v2",
+            # "button-press-topdown-v2",
+            # "reach-v2",
+        ]:
+            total_steps: int = 20_000_000
+            n_steps = 2048
+            gamma = 0.99
+            batch_size = 64
+            gae_lambda = 0.95
+            learning_rate = 5e-4
+            n_epochs = 10
 
-    #         note = "basline_ppo"
-    #         cmd(
-    #             "python",
-    #             "src/ppo_stbl_MT10.py",
-    #             "--seed",
-    #             seed,
-    #             "--env",
-    #             env,
-    #             "--total-steps",
-    #             total_steps,
-    #             "--n-steps",
-    #             n_steps,
-    #             "--gamma",
-    #             gamma,
-    #             "--batch-size",
-    #             batch_size,
-    #             "--gae-lambda",
-    #             gae_lambda,
-    #             "--learning-rate",
-    #             learning_rate,
-    #             "--n-epochs",
-    #             n_epochs,
-    #             "--note",
-    #             note,
-    #             "--log-dir",
-    #             Out(f"PPO_stbl_MT10_baseline/env={env}_seed={seed}_note={note}/"),
-    #             warmup_time=3,
-    #             ram_gb=ram_gb,
-    #             priority=(35, -seed),
-    #         )
+            note = "basline_stbl_ppo"
+            cmd(
+                "python",
+                "src/ppo_stbl_MT10.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--total-steps",
+                total_steps,
+                "--n-steps",
+                n_steps,
+                "--gamma",
+                gamma,
+                "--batch-size",
+                batch_size,
+                "--gae-lambda",
+                gae_lambda,
+                "--learning-rate",
+                learning_rate,
+                "--n-epochs",
+                n_epochs,
+                "--note",
+                note,
+                "--log-dir",
+                Out(f"PPO_stbl_MT10_baseline/env={env}_seed={seed}_note={note}/"),
+                warmup_time=3,
+                ram_gb=ram_gb,
+                priority=(35, -seed),
+            )
     # for seed in seeds:
     #     for env, total_steps in [
     #         ("pick-place-v2", 20_000_000),

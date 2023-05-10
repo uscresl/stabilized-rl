@@ -33,7 +33,6 @@ def ppo_stbl_MT10(
     n_steps: int = 10_000,
     batch_size=32,
     gae_lambda: float = 1,
-    target_kl: float = 1.5e-3,
     note: str = "buffer_kl_loss",
     *,
     env: str,
@@ -51,7 +50,6 @@ def ppo_stbl_MT10(
         batch_size=batch_size,
         gae_lambda=gae_lambda,
         gamma=gamma,
-        target_kl=target_kl,
         max_path_length=max_path_length,
         n_epochs=n_epochs,
         learning_rate=learning_rate,
@@ -80,7 +78,6 @@ if __name__ == "__main__":
         n_epochs: int,
         batch_size=32,
         gae_lambda: float = 1,
-        target_kl: float = 1.5e-3,
         total_steps: int = 20_000_000,
     ):
         env, max_path_length = gen_env(env)
@@ -94,7 +91,6 @@ if __name__ == "__main__":
             learning_rate=learning_rate,
             batch_size=batch_size,
             gae_lambda=gae_lambda,
-            target_kl=target_kl,
             note=note,
             max_path_length=max_path_length,
             total_steps=total_steps,
