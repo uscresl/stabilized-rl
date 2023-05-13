@@ -83,7 +83,7 @@ if __name__ == "__main__":
         kl_loss_coeff_momentum: float = 0.9999, # Not used with adam
         kl_target_stat: str = "max",
         n_steps: int = 4096,
-        batch_size: int = 256,
+        batch_size: int = 512,
         optimize_log_loss_coeff: bool = False,
         reset_optimizers: bool = True,
         minibatch_kl_penalty: bool = True,
