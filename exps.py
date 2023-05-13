@@ -343,7 +343,7 @@ elif HOST == "resl34":
             #         seed,
             #     ),
             # )
-            total_steps = 10_000_000
+            total_steps = 20_000_000
             note = "small-log-beta" + batch_size_postfix
             for kl_loss_coeff_lr in (0.1, 1.0):
                 cmd(
@@ -365,13 +365,13 @@ elif HOST == "resl34":
                     "--optimize-log-loss-coeff=yes",
                     "--log-dir",
                     Out(
-                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
+                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_kl-loss-coeff-lr={kl_loss_coeff_lr}_note={note}/"
                     ),
                     warmup_time=3,
                     ram_gb=ram_gb,
                     priority=(
                         63,
-                        int(env in ["Walker2d-v2"]),
+                        int(env in ["Walker2d-v2"]) + int(kl_loss_coeff_lr == 1.0),
                         seed,
                     ),
                 )

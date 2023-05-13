@@ -16,6 +16,7 @@ from stable_baselines3.common.policies import (
     MultiInputActorCriticPolicy,
 )
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule, RolloutBufferSamples
+from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.utils import (
     explained_variance,
     get_schedule_fn,
@@ -27,8 +28,11 @@ from torch.distributions.independent import Independent
 from torch.nn import functional as F
 
 MIN_KL_LOSS_COEFF = 1e-2
-MAX_KL_LOSS_COEFF = 1024
-MAX_LOG_KL_LOSS_COEFF = 10
+# MAX_KL_LOSS_COEFF = 1024
+# MAX_LOG_KL_LOSS_COEFF = 10
+
+MAX_KL_LOSS_COEFF = 2**20
+MAX_LOG_KL_LOSS_COEFF = 20
 
 
 class KLPOStbl(OnPolicyAlgorithm):
@@ -249,6 +253,10 @@ class KLPOStbl(OnPolicyAlgorithm):
         """
         Update policy using the currently gathered rollout buffer.
         """
+        if self._train_calls % 10 == 0:
+            eval_return_mean, eval_return_std = evaluate_policy(self.policy, self.env)
+            self.logger.record("rollout/EvalReturnMean", eval_return_mean)
+            self.logger.record("rollout/EvalReturnStd", eval_return_std)
         self._train_calls += 1
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)

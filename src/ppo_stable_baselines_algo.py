@@ -15,6 +15,7 @@ from stable_baselines3.common.policies import (
     MultiInputActorCriticPolicy,
 )
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
+from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.utils import (
     explained_variance,
     get_schedule_fn,
@@ -172,6 +173,7 @@ class PPO(OnPolicyAlgorithm):
         self.max_path_length = max_path_length
         if _init_setup_model:
             self._setup_model()
+        self._train_calls = 0
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -191,6 +193,11 @@ class PPO(OnPolicyAlgorithm):
         """
         Update policy using the currently gathered rollout buffer.
         """
+        if self._train_calls % 10 == 0:
+            eval_return_mean, eval_return_std = evaluate_policy(self.policy, self.env)
+            self.logger.record("rollout/EvalReturnMean", eval_return_mean)
+            self.logger.record("rollout/EvalReturnStd", eval_return_std)
+        self._train_calls += 1
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)
         # Update optimizer learning rate
