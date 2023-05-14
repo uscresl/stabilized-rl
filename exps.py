@@ -51,11 +51,11 @@ if HOST == "brain.usc.edu":
                 priority=-10,
             )
 elif HOST == "resl34":
-    GLOBAL_CONTEXT.max_concurrent_jobs = 8
+    GLOBAL_CONTEXT.max_concurrent_jobs = 4
     for seed in seeds:
         ram_gb = 4
         for env in mujoco_envs:
-            total_steps = 10_000_000
+            total_steps = 20_000_000
             note = "baseline_ppo_10m"
             cmd(
                 "python",
@@ -73,8 +73,9 @@ elif HOST == "resl34":
                     f"ppo_stbl/env={env}_seed={seed}_note={note}/"
                 ),
                 priority=(
-                    63,
+                    64,
                     int(env in ["Walker2d-v2"]),
+                    int(env in ["Hopper-v2"]),
                     seed,
                 ),
             )
@@ -110,8 +111,9 @@ elif HOST == "resl34":
                 warmup_time=3,
                 ram_gb=ram_gb,
                 priority=(
-                    62,
-                    int(env in ["HalfCheetah-v2"]),
+                    64,
+                    int(env in ["Walker2d-v2"]),
+                    int(env in ["Hopper-v2"]),
                     seed,
                 ),
             )
@@ -370,7 +372,7 @@ elif HOST == "resl34":
                     warmup_time=3,
                     ram_gb=ram_gb,
                     priority=(
-                        63,
+                        59,
                         int(env in ["Walker2d-v2"]) + int(kl_loss_coeff_lr == 1.0),
                         seed,
                     ),
