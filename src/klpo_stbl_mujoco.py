@@ -36,6 +36,7 @@ def klpo_stbl(
     historic_buffer_size,
     second_loop_vf,
     multi_step_trust_region,
+    max_kl_loss_coeff,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -63,6 +64,8 @@ def klpo_stbl(
         historic_buffer_size=historic_buffer_size,
         second_loop_vf=second_loop_vf,
         multi_step_trust_region=multi_step_trust_region,
+        max_kl_loss_coeff=max_kl_loss_coeff,
+        eval_policy=True,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -98,6 +101,7 @@ if __name__ == "__main__":
         historic_buffer_size: int = 32000,
         second_loop_vf: bool = False,
         multi_step_trust_region: bool = True,
+        max_kl_loss_coeff: int = 2**20,
     ):
         klpo_stbl(
             dict(log_dir=log_dir),
@@ -124,4 +128,5 @@ if __name__ == "__main__":
             historic_buffer_size=historic_buffer_size,
             second_loop_vf=second_loop_vf,
             multi_step_trust_region=multi_step_trust_region,
+            max_kl_loss_coeff=max_kl_loss_coeff
         )

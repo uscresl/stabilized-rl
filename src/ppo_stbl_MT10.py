@@ -55,7 +55,7 @@ def ppo_stbl_MT10(
         n_epochs=n_epochs,
         learning_rate=learning_rate,
         ent_coef=0.01,
-        policy_kwargs=dict(net_arch=dict(activation_fn=torch.nn.tanh,
+        policy_kwargs=dict(net_arch=dict(activation_fn=torch.nn.Tanh,
                                          pi=[128, 128], vf=[128, 128]))
     )
 

@@ -111,6 +111,7 @@ class PPO(OnPolicyAlgorithm):
         device: Union[th.device, str] = "auto",
         max_path_length: int = None,
         _init_setup_model: bool = True,
+        eval_policy: bool = False,
     ):
 
         super().__init__(
@@ -174,6 +175,7 @@ class PPO(OnPolicyAlgorithm):
         if _init_setup_model:
             self._setup_model()
         self._train_calls = 0
+        self._eval_policy = eval_policy
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -193,10 +195,10 @@ class PPO(OnPolicyAlgorithm):
         """
         Update policy using the currently gathered rollout buffer.
         """
-        #if self._train_calls % 10 == 0:
-        #    eval_return_mean, eval_return_std = evaluate_policy(self.policy, self.env)
-        #    self.logger.record("rollout/EvalReturnMean", eval_return_mean)
-        #    self.logger.record("rollout/EvalReturnStd", eval_return_std)
+        if self._train_calls % 10 == 0 and self._eval_policy:
+            eval_return_mean, eval_return_std = evaluate_policy(self.policy, self.env)
+            self.logger.record("rollout/EvalReturnMean", eval_return_mean)
+            self.logger.record("rollout/EvalReturnStd", eval_return_std)
         self._train_calls += 1
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)

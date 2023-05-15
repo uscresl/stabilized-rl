@@ -31,8 +31,8 @@ MIN_KL_LOSS_COEFF = 1e-2
 # MAX_KL_LOSS_COEFF = 1024
 # MAX_LOG_KL_LOSS_COEFF = 10
 
-MAX_KL_LOSS_COEFF = 2**20
-MAX_LOG_KL_LOSS_COEFF = 20
+# MAX_KL_LOSS_COEFF = 2**20
+# MAX_LOG_KL_LOSS_COEFF = 20
 
 
 class KLPOStbl(OnPolicyAlgorithm):
@@ -135,6 +135,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         second_loop_batch_size: int = 6400,
         second_loop_vf: bool = False,
         multi_step_trust_region: bool = True,
+        max_kl_loss_coeff: int = 2**20,
+        eval_policy: bool = False,
     ):
 
         super().__init__(
@@ -234,6 +236,8 @@ class KLPOStbl(OnPolicyAlgorithm):
                 momentum=self._kl_loss_coeff_momentum,
             )
         self._initial_kl_loss_coeff_state_dict = self._kl_loss_coeff_opt.state_dict()
+        self._max_kl_loss_coeff = max_kl_loss_coeff
+        self._eval_policy = eval_policy
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -255,7 +259,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         """
         Update policy using the currently gathered rollout buffer.
         """
-        if self._train_calls % 10 == 0:
+        if self._train_calls % 10 == 0 and self._eval_policy:
             eval_return_mean, eval_return_std = evaluate_policy(self.policy, self.env)
             self.logger.record("rollout/EvalReturnMean", eval_return_mean)
             self.logger.record("rollout/EvalReturnStd", eval_return_std)
@@ -439,17 +443,17 @@ class KLPOStbl(OnPolicyAlgorithm):
                     with th.no_grad():
                         self._kl_loss_coeff_param.copy_(1 + MIN_KL_LOSS_COEFF)
                     assert self._kl_loss_coeff_param >= 1 + MIN_KL_LOSS_COEFF
-                elif self._kl_loss_coeff_param > MAX_LOG_KL_LOSS_COEFF:
+                elif self._kl_loss_coeff_param > np.log2(self._max_kl_loss_coeff):
                     with th.no_grad():
-                        self._kl_loss_coeff_param.copy_(MAX_LOG_KL_LOSS_COEFF)
+                        self._kl_loss_coeff_param.copy_(np.log2(self._max_kl_loss_coeff))
             else:
                 if self._kl_loss_coeff_param < MIN_KL_LOSS_COEFF:
                     with th.no_grad():
                         self._kl_loss_coeff_param.copy_(MIN_KL_LOSS_COEFF)
                     assert self._kl_loss_coeff_param >= MIN_KL_LOSS_COEFF
-                elif self._kl_loss_coeff_param > MAX_KL_LOSS_COEFF:
+                elif self._kl_loss_coeff_param > self._max_kl_loss_coeff:
                     with th.no_grad():
-                        self._kl_loss_coeff_param.copy_(MAX_KL_LOSS_COEFF)
+                        self._kl_loss_coeff_param.copy_(self._max_kl_loss_coeff)
             kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
             return kl_div
 

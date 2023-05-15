@@ -19,6 +19,7 @@ def ppo_stbl(
         env,
         seed=seed,
         max_path_length=1000,
+        eval_policy=True,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
