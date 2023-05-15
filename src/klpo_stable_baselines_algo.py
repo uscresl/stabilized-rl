@@ -134,6 +134,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         sparse_second_loop: bool = True,
         second_loop_batch_size: int = 6400,
         second_loop_vf: bool = False,
+        multi_step_trust_region: bool = True,
     ):
 
         super().__init__(
@@ -220,6 +221,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._second_loop_batch_size = second_loop_batch_size
         self._kl_loss_coeff_param = th.nn.Parameter(th.tensor(1.0))
         self._second_loop_vf = second_loop_vf
+        self._multi_step_trust_region = multi_step_trust_region
         if self._use_beta_adam:
             self._kl_loss_coeff_opt = th.optim.Adam(
                 [self._kl_loss_coeff_param],
@@ -453,13 +455,15 @@ class KLPOStbl(OnPolicyAlgorithm):
 
         second_penalty_loops = []
         second_penalty_skip_ratio = []
+        # Save the current policy state and train
+        self._old_policy.load_state_dict(self.policy.state_dict())
         # train for n_epochs epochs
         for epoch in range(self.n_epochs):
             # Do a complete pass on the rollout buffer
             batch_adv_mean = self.rollout_buffer.advantages.mean()
             batch_adv_std = self.rollout_buffer.advantages.std()
-            # Save the current policy state and train
-            self._old_policy.load_state_dict(self.policy.state_dict())
+            if self._multi_step_trust_region:
+                self._old_policy.load_state_dict(self.policy.state_dict())
 
             with th.no_grad():
                 full_batch_old_dist = self._old_policy.get_distribution(

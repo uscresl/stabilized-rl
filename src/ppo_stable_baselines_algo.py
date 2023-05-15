@@ -193,10 +193,10 @@ class PPO(OnPolicyAlgorithm):
         """
         Update policy using the currently gathered rollout buffer.
         """
-        if self._train_calls % 10 == 0:
-            eval_return_mean, eval_return_std = evaluate_policy(self.policy, self.env)
-            self.logger.record("rollout/EvalReturnMean", eval_return_mean)
-            self.logger.record("rollout/EvalReturnStd", eval_return_std)
+        #if self._train_calls % 10 == 0:
+        #    eval_return_mean, eval_return_std = evaluate_policy(self.policy, self.env)
+        #    self.logger.record("rollout/EvalReturnMean", eval_return_mean)
+        #    self.logger.record("rollout/EvalReturnStd", eval_return_std)
         self._train_calls += 1
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)

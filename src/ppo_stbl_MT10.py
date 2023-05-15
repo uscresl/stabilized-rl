@@ -1,5 +1,6 @@
 import clize
 
+import torch
 from garage import wrap_experiment
 from torch.distributions.kl import (
     _kl_lowrankmultivariatenormal_lowrankmultivariatenormal,
@@ -53,6 +54,9 @@ def ppo_stbl_MT10(
         max_path_length=max_path_length,
         n_epochs=n_epochs,
         learning_rate=learning_rate,
+        ent_coef=0.01,
+        policy_kwargs=dict(net_arch=dict(activation_fn=torch.nn.tanh,
+                                         pi=[128, 128], vf=[128, 128]))
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])

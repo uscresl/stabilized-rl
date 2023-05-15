@@ -12,7 +12,7 @@ from metaworld.envs.mujoco.env_dict import MT10_V2
 HOST = gethostname()
 
 if HOST == "brain.usc.edu":
-    GLOBAL_CONTEXT.max_concurrent_jobs = 8
+    GLOBAL_CONTEXT.max_concurrent_jobs = 24
 
 mujoco_envs = [
     # "InvertedDoublePendulum-v2",
@@ -34,21 +34,86 @@ ppo_env_names_v3 = [
 
 if HOST == "brain.usc.edu":
     for seed in seeds:
-        for env in mujoco_envs:
+        for env in [
+            "pick-place-v2",
+            "window-open-v2",
+            # "button-press-topdown-v2",
+            "reach-v2",
+        ]:
+            total_steps: int = 20_000_000
+            n_steps = 50000
+            gamma = 0.99
+            batch_size = 64
+            gae_lambda = 0.95
+            learning_rate = 5e-4
+            n_epochs = 1
+
+            note = "basline_stbl_ppo"
             cmd(
                 "python",
-                "src/ppo_mujoco.py",
+                "src/ppo_stbl_MT10.py",
                 "--seed",
                 seed,
                 "--env",
                 env,
-                "--center-adv=True",
-                "--normalize-env",
+                "--total-steps",
+                total_steps,
+                "--n-steps",
+                n_steps,
+                "--gamma",
+                gamma,
+                "--batch-size",
+                batch_size,
+                "--gae-lambda",
+                gae_lambda,
+                "--learning-rate",
+                learning_rate,
+                "--n-epochs",
+                n_epochs,
+                "--note",
+                note,
                 "--log-dir",
-                Out(f"ppo/env={env}_seed={seed}_normalized/"),
+                Out(f"PPO_stbl_MT10_baseline/env={env}_seed={seed}_note={note}/"),
                 warmup_time=3,
-                ram_gb=20,
-                priority=-10,
+                ram_gb=ram_gb,
+                priority=(35, -seed),
+            )
+    for seed in seeds:
+        for env in mujoco_envs:
+            total_steps = 10_000_000
+            batch_size = 512
+            target_kl = 0.03
+            kl_loss_coeff_lr = 5.0
+            n_steps = 4096
+            note = "xppo_single_step_trust_region"
+            cmd(
+                "python",
+                "src/klpo_stbl_mujoco.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--total-steps",
+                total_steps,
+                "--target-kl",
+                target_kl,
+                "--kl-loss-coeff-lr",
+                kl_loss_coeff_lr,
+                "--n-steps",
+                n_steps,
+                "--multi-step-trust-region=no",
+                "--note",
+                note,
+                "--log-dir",
+                Out(
+                    f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
+                ),
+                warmup_time=3,
+                ram_gb=ram_gb,
+                priority=(
+                    34, 
+                    -seed,
+                ),
             )
 elif HOST == "resl34":
     GLOBAL_CONTEXT.max_concurrent_jobs = 0
