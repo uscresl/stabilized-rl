@@ -1,6 +1,7 @@
 /venv
 /venv*
 /data
+/data*
 __pycache__
 /versions
 /.vscode

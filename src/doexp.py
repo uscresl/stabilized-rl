@@ -31,6 +31,7 @@ class Cmd:
     ram_gb: float = 4.0
     priority: Union[int, Tuple[int, ...]] = 10
     gpus: Union[str, None] = None
+    cores: int = 1
 
 
 _BYTES_PER_GB = (1024) ** 3
@@ -103,6 +104,14 @@ def _filter_cmds_ram(commands, *, reserved_ram_gb, ram_gb_cap):
     return out_commands
 
 
+def _filter_cmds_cores(commands, *, reserved_cores, max_core_alloc):
+    out_commands = set()
+    for cmd in commands:
+        if reserved_cores + cmd.cores <= max_core_alloc:
+            out_commands.add(cmd)
+    return out_commands
+
+
 def _sort_cmds(commands):
     def key(cmd):
         priority_as_list = cmd.priority
@@ -151,11 +160,11 @@ def _cmd_name(cmd):
     return name
 
 
-def _run_process(args, *, gpus, ram_gb, stdout, stderr):
+def _run_process(args, *, gpus, cores, ram_gb, stdout, stderr):
     global next_cuda_device
     env = os.environ.copy()
     if _USING_SLURM:
-        args = ["srun", f"--mem={int(math.ceil(ram_gb))}G", "--"] + args
+        args = ["srun", f"--mem={int(math.ceil(ram_gb))}G", f"--cpus-per-task={cores}", "--"] + args
     elif gpus is not None:
         env["CUDA_VISIBLE_DEVICES"] = gpus
     elif len(CUDA_DEVICES) > 1:
@@ -173,6 +182,8 @@ class Context:
     data_dir: str = f"{os.getcwd()}/data/experiments"
     _vm_percent_cap: float = 90.0
     max_concurrent_jobs: int or None = psutil.cpu_count()
+    max_core_alloc: int or None = psutil.cpu_count()
+    reserved_cores: int = 0
     warmup_deadline: float = time.monotonic()
     reserved_ram_gb: float = _ram_in_use_gb()
 
@@ -253,7 +264,11 @@ class Context:
                 reserved_ram_gb=self.reserved_ram_gb,
                 ram_gb_cap=self.ram_gb_cap,
             )
-        not_running = self._filter_cmds_running(fits_in_ram)
+        fits_in_core_alloc = _filter_cmds_cores(
+            fits_in_ram,
+            reserved_cores=self.reserved_cores,
+            max_core_alloc=self.max_core_alloc)
+        not_running = self._filter_cmds_running(fits_in_core_alloc)
         return not_running, not bool(needs_output)
 
     def _filter_cmds_running(self, commands):
@@ -272,6 +287,7 @@ class Context:
     def run_cmd(self, cmd):
         """Sets temp files and starts a process for cmd"""
         self.reserved_ram_gb += cmd.ram_gb
+        self.reserved_cores += cmd.cores
         cmd_dir = os.path.join(self.data_dir, "pipes", _cmd_name(cmd))
         os.makedirs(cmd_dir, exist_ok=True)
         stdout = open(os.path.join(cmd_dir, "stdout.txt"), "w")
@@ -279,7 +295,7 @@ class Context:
         args = _cmd_to_args(cmd, self.data_dir)
         print(" ".join(args))
         proc = _run_process(
-            args, gpus=cmd.gpus, ram_gb=cmd.ram_gb, stdout=stdout, stderr=stderr
+            args, gpus=cmd.gpus, ram_gb=cmd.ram_gb, cores=cmd.cores, stdout=stdout, stderr=stderr
         )
         print(proc.pid)
         self.warmup_deadline = time.monotonic() + cmd.warmup_time
@@ -324,6 +340,7 @@ class Context:
         """Copy outputs from the tmp dir if the process exited successfully"""
         for (cmd, proc) in completed:
             self.reserved_ram_gb -= cmd.ram_gb
+            self.reserved_cores -= cmd.cores
             if proc.returncode != 0:
                 print(f"Error running {cmd}")
                 cmd_dir = os.path.join(self.data_dir, "pipes", _cmd_name(cmd))
@@ -358,6 +375,7 @@ def cmd(
     ram_gb: float = 4,
     priority: Union[int, List[int], Tuple[int, ...]] = 10,
     gpus: Union[str, None] = None,
+    cores: int = 1,
 ):
     """Add a command to be run by the GLOBAL_CONTEXT"""
     if isinstance(priority, list):
@@ -371,6 +389,7 @@ def cmd(
             ram_gb=ram_gb,
             priority=priority,
             gpus=gpus,
+            cores=cores,
         )
     )
 

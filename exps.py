@@ -12,7 +12,9 @@ from metaworld.envs.mujoco.env_dict import MT10_V2
 HOST = gethostname()
 
 if HOST == "brain.usc.edu":
-    GLOBAL_CONTEXT.max_concurrent_jobs = 190
+    #GLOBAL_CONTEXT.max_concurrent_jobs = 190
+    GLOBAL_CONTEXT.max_concurrent_jobs = 100
+    GLOBAL_CONTEXT.max_core_alloc = 432
 
 mujoco_envs = [
     # "InvertedDoublePendulum-v2",
@@ -40,8 +42,9 @@ if HOST == "brain.usc.edu":
             # "button-press-topdown-v2",
             "reach-v2",
         ]:
-            ram_gb = 4
+
             total_steps: int = 20_000_000
+            ram_gb = 4
             n_steps = 50000
             gamma = 0.99
             batch_size = 64
@@ -78,6 +81,7 @@ if HOST == "brain.usc.edu":
                 warmup_time=3,
                 ram_gb=ram_gb,
                 priority=(40, -seed),
+                cores=8,
             )
 
             batch_size = 512
@@ -110,10 +114,15 @@ if HOST == "brain.usc.edu":
                 warmup_time=3,
                 ram_gb=ram_gb,
                 priority=(
-                    40, 
+                    49, 
                     -seed,
                 ),
+                cores=8,
             )
+            if env == "pick-place-v2":
+                total_steps: int = 20_000_000
+            else:
+                total_steps: int = 3_000_000
 
             note = "xppo_single_step_no_historic"
             cmd(
@@ -143,9 +152,10 @@ if HOST == "brain.usc.edu":
                 warmup_time=3,
                 ram_gb=ram_gb,
                 priority=(
-                    40, 
+                    43, 
                     -seed,
                 ),
+                cores=8,
             )
 
             n_steps = 50_000
@@ -178,81 +188,89 @@ if HOST == "brain.usc.edu":
                 warmup_time=3,
                 ram_gb=ram_gb,
                 priority=(
-                    40, 
+                    10, 
+                    -seed,
+                ),
+                cores=8,
+            )
+
+
+        env = "pick-place-v2"
+        #for target_kl in [0.01, 0.02, 0.03, 0.1, 0.2]:
+        for target_kl in [0.02, 0.1, 0.2]:
+            total_steps = 3_000_000
+            n_steps = 4096
+            note = "xppo_metaworld_sweep"
+            cmd(
+                "python",
+                "src/klpo_stbl_MT10.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--total-steps",
+                total_steps,
+                "--target-kl",
+                target_kl,
+                "--kl-loss-coeff-lr",
+                kl_loss_coeff_lr,
+                "--n-steps",
+                n_steps,
+                "--multi-step-trust-region=no",
+                "--note",
+                note,
+                "--log-dir",
+                Out(
+                    f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
+                ),
+                warmup_time=3,
+                ram_gb=ram_gb,
+                priority=(
+                    0, 
+                    int(env in ["pick-place-v2"]),
+                    -seed,
+                ),
+            )
+            n_steps = 50_000
+            note = "xppo_metaworld_sweep_50k"
+            cmd(
+                "python",
+                "src/klpo_stbl_MT10.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--total-steps",
+                total_steps,
+                "--target-kl",
+                target_kl,
+                "--kl-loss-coeff-lr",
+                kl_loss_coeff_lr,
+                "--n-steps",
+                n_steps,
+                "--second-loop-batch-size=25000",
+                "--historic-buffer-size=50000",
+                "--multi-step-trust-region=no",
+                "--note",
+                note,
+                "--log-dir",
+                Out(
+                    f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
+                ),
+                warmup_time=3,
+                ram_gb=ram_gb,
+                priority=(
+                    0,
+                    int(env in ["pick-place-v2"]),
                     -seed,
                 ),
             )
 
-            for target_kl in [0.01, 0.02, 0.03]:
-                total_steps = 3_000_000
-                n_steps = 4096
-                note = "xppo_metaworld_sweep"
-                cmd(
-                    "python",
-                    "src/klpo_stbl_MT10.py",
-                    "--seed",
-                    seed,
-                    "--env",
-                    env,
-                    "--total-steps",
-                    total_steps,
-                    "--target-kl",
-                    target_kl,
-                    "--kl-loss-coeff-lr",
-                    kl_loss_coeff_lr,
-                    "--n-steps",
-                    n_steps,
-                    "--multi-step-trust-region=no",
-                    "--note",
-                    note,
-                    "--log-dir",
-                    Out(
-                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
-                    ),
-                    warmup_time=3,
-                    ram_gb=ram_gb,
-                    priority=(
-                        41, 
-                        int(env in ["pick-place-v2"]),
-                        -seed,
-                    ),
-                )
-                n_steps = 50_000
-                note = "xppo_metaworld_sweep_50k"
-                cmd(
-                    "python",
-                    "src/klpo_stbl_MT10.py",
-                    "--seed",
-                    seed,
-                    "--env",
-                    env,
-                    "--total-steps",
-                    total_steps,
-                    "--target-kl",
-                    target_kl,
-                    "--kl-loss-coeff-lr",
-                    kl_loss_coeff_lr,
-                    "--n-steps",
-                    n_steps,
-                    "--multi-step-trust-region=no",
-                    "--note",
-                    note,
-                    "--log-dir",
-                    Out(
-                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
-                    ),
-                    warmup_time=3,
-                    ram_gb=ram_gb,
-                    priority=(
-                        42,
-                        int(env in ["pick-place-v2"]),
-                        -seed,
-                    ),
-                )
-
     for seed in seeds:
         for env in mujoco_envs:
             total_steps = 10_000_000
+            if env == "HalfCheetah-v2":
+                total_steps = 3_000_000
             note = "baseline_ppo_10m"
             cmd(
                 "python",
@@ -270,10 +288,11 @@ if HOST == "brain.usc.edu":
                     f"ppo_stbl/env={env}_seed={seed}_note={note}/"
                 ),
                 priority=(
-                    36,
+                    48,
                     int(env in ["Walker2d-v2", "Hopper-v2"]),
                     -seed,
                 ),
+                cores=8,
             )
             ram_gb = 4
             batch_size = 512
@@ -306,9 +325,10 @@ if HOST == "brain.usc.edu":
                 warmup_time=3,
                 ram_gb=ram_gb,
                 priority=(
-                    35, 
+                    50, 
                     -seed,
                 ),
+                cores=8,
             )
             #total_steps = 3_000_000
             note = "one-phase_single_step"
@@ -338,9 +358,10 @@ if HOST == "brain.usc.edu":
                 warmup_time=3,
                 ram_gb=ram_gb,
                 priority=(
-                    34, 
+                    49, 
                     -seed,
                 ),
+                cores=8,
             )
             note = "no-reset_single_step"
             cmd(
@@ -370,9 +391,10 @@ if HOST == "brain.usc.edu":
                 warmup_time=3,
                 ram_gb=ram_gb,
                 priority=(
-                    34, 
+                    49, 
                     -seed,
                 ),
+                cores=8,
             )
             note = "second-loop-vf_single_step"
             cmd(
@@ -401,42 +423,43 @@ if HOST == "brain.usc.edu":
                 warmup_time=3,
                 ram_gb=ram_gb,
                 priority=(
-                    34, 
+                    20, 
+                    -seed,
+                ),
+                cores=8,
+            )
+            target_kl = 0.02
+            note = "mean-kl-target_single_step"
+            cmd(
+                "python",
+                "src/klpo_stbl_mujoco.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--total-steps",
+                total_steps,
+                "--target-kl",
+                target_kl,
+                "--kl-loss-coeff-lr",
+                kl_loss_coeff_lr,
+                "--n-steps",
+                n_steps,
+                "--multi-step-trust-region=no",
+                "--note",
+                note,
+                "--kl-target-stat=mean",
+                "--log-dir",
+                Out(
+                    f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
+                ),
+                warmup_time=3,
+                ram_gb=ram_gb,
+                priority=(
+                    49, 
                     -seed,
                 ),
             )
-            for target_kl in [0.02]:
-                note = "mean-kl-target_single_step"
-                cmd(
-                    "python",
-                    "src/klpo_stbl_mujoco.py",
-                    "--seed",
-                    seed,
-                    "--env",
-                    env,
-                    "--total-steps",
-                    total_steps,
-                    "--target-kl",
-                    target_kl,
-                    "--kl-loss-coeff-lr",
-                    kl_loss_coeff_lr,
-                    "--n-steps",
-                    n_steps,
-                    "--multi-step-trust-region=no",
-                    "--note",
-                    note,
-                    "--kl-target-stat=mean",
-                    "--log-dir",
-                    Out(
-                        f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
-                    ),
-                    warmup_time=3,
-                    ram_gb=ram_gb,
-                    priority=(
-                        34, 
-                        -seed,
-                    ),
-                )
             #env = "HalfCheetah-v2"
             # for target_kl in [0.1, 0.2, 0.3, 0.4]:
             #     note = "xppo_single_step_trust_region"
