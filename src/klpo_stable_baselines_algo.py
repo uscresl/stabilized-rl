@@ -138,6 +138,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         multi_step_trust_region: bool = True,
         max_kl_loss_coeff: int = 2**20,
         eval_policy: bool = False,
+        debug_output_directory: Optional[str] = None,
     ):
 
         super().__init__(
@@ -239,6 +240,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._initial_kl_loss_coeff_state_dict = self._kl_loss_coeff_opt.state_dict()
         self._max_kl_loss_coeff = max_kl_loss_coeff
         self._eval_policy = eval_policy
+        self._debug_output_directory = debug_output_directory
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -276,7 +278,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         entropy_losses = []
         pg_losses, value_losses = [], []
         kl_losses = []
-        kl_loss_coeffs = []
+        kl_loss_coeffs = [self._kl_loss_coeff_param.item()]
         clip_fractions = []
 
         continue_training = True
@@ -303,6 +305,8 @@ class KLPOStbl(OnPolicyAlgorithm):
                 self._kl_loss_coeff_param.copy_(1.0)
             self._kl_loss_coeff_opt.load_state_dict(self._initial_kl_loss_coeff_state_dict)
         kl_divs = []
+        full_kl_divs = []
+        full_max_kl_divs = []
 
         def minibatch_step(rollout_data, use_pg_loss):
             actions = rollout_data.actions
@@ -415,6 +419,15 @@ class KLPOStbl(OnPolicyAlgorithm):
                 else:
                     loss = loss_coeff_param.detach() * kl_div.mean()
 
+            kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
+            if self._debug_output_directory is not None:
+                full_batch_kl_div = kl_divergence(
+                    Independent(full_batch_new_dist, 1),
+                    Independent(full_batch_old_dist, 1),
+                )
+                full_kl_divs.append(full_batch_kl_div.mean().item())
+                full_max_kl_divs.append(full_batch_kl_div.max().item())
+
             # If optimizing the log loss coeff, then
             # self._kl_loss_coeff_param is the "log loss coeff"
             if self._kl_target_stat == "mean":
@@ -455,13 +468,17 @@ class KLPOStbl(OnPolicyAlgorithm):
                 elif self._kl_loss_coeff_param > self._max_kl_loss_coeff:
                     with th.no_grad():
                         self._kl_loss_coeff_param.copy_(self._max_kl_loss_coeff)
-            kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
+            #kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
             return kl_div
 
         second_penalty_loops = []
         second_penalty_skip_ratio = []
         # Save the current policy state and train
         self._old_policy.load_state_dict(self.policy.state_dict())
+        second_loop_backwards = []
+        second_loop_minibatches = []
+        second_loop_all_skips = []
+        first_loop_minibatches = []
         # train for n_epochs epochs
         self._old_policy.load_state_dict(self.policy.state_dict())
 
@@ -481,10 +498,15 @@ class KLPOStbl(OnPolicyAlgorithm):
                 self.policy.optimizer.load_state_dict(
                     self._initial_policy_opt_state_dict
                 )
+            n_first_loop_minibatch = 0
             for rollout_data in self.rollout_buffer.get(self.batch_size):
                 kl_div = minibatch_step(rollout_data=rollout_data, use_pg_loss=True)
+                n_first_loop_minibatch += 1
 
             penalty_loops = 0
+            n_second_loop_minibatch = 0
+            n_second_loop_backward = 0
+            second_loop_skips = []
             if self._sparse_second_loop:
                 while self._second_penalty_loop:
                     skipped_minibatches = 0
@@ -495,9 +517,15 @@ class KLPOStbl(OnPolicyAlgorithm):
                         kl_div = minibatch_step(rollout_data=historic_data,
                                                 use_pg_loss=False)
                         if (kl_div <= self.target_kl).all():
+                            second_loop_skips.append(True)
                             skipped_minibatches += 1
                         elif self._kl_target_stat == "mean" and kl_div.mean() <= self.target_kl:
+                            second_loop_skips.append(True)
                             skipped_minibatches += 1
+                        else:
+                            second_loop_skips.append(False)
+                            n_second_loop_backward += 1
+                        n_second_loop_minibatch += 1
                     second_penalty_skip_ratio.append(skipped_minibatches / total_minibatches)
                     penalty_loops += 1
                     if skipped_minibatches == total_minibatches:
@@ -526,9 +554,42 @@ class KLPOStbl(OnPolicyAlgorithm):
                         self.logger.record("train/broke_loop", 1)
                         break
             second_penalty_loops.append(penalty_loops)
+            first_loop_minibatches.append(n_first_loop_minibatch)
+            second_loop_minibatches.append(n_second_loop_minibatch)
+            second_loop_backwards.append(n_second_loop_backward)
+            second_loop_all_skips.append(second_loop_skips)
 
             if not continue_training:
                 break
+
+        if self._debug_output_directory is not None:
+            with th.no_grad():
+                full_batch_old_dist = self._old_policy.get_distribution(
+                    historic_obs
+                ).distribution
+                full_batch_new_dist = self.policy.get_distribution(
+                    historic_obs
+                ).distribution
+            full_batch_kl_div = kl_divergence(
+                Independent(full_batch_new_dist, 1),
+                Independent(full_batch_old_dist, 1),
+            )
+            kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
+            full_kl_divs.append(full_batch_kl_div.mean().item())
+            full_max_kl_divs.append(full_batch_kl_div.max().item())
+
+            with open(f"{self._debug_output_directory}/step_{self._train_calls}.pkl", "wb") as f:
+                import pickle
+                pickle.dump({
+                    'kl_divs': kl_divs,
+                    'full_kl_divs': full_kl_divs,
+                    'full_max_kl_divs': full_max_kl_divs,
+                    'first_loop_minibatches': first_loop_minibatches,
+                    'second_loop_minibatches': second_loop_minibatches,
+                    'second_loop_backwards': second_loop_backwards,
+                    'second_loop_all_skips': second_loop_all_skips,
+                    'kl_loss_coeffs': kl_loss_coeffs,
+                }, f)
 
         self._n_updates += self.n_epochs
         explained_var = explained_variance(
