@@ -28,6 +28,7 @@ from torch.distributions.independent import Independent
 from torch.nn import functional as F
 
 MIN_KL_LOSS_COEFF = 1e-2
+SECOND_PENALTY_LOOP_MAX = 100
 # MAX_KL_LOSS_COEFF = 1024
 # MAX_LOG_KL_LOSS_COEFF = 10
 
@@ -405,7 +406,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                         value_loss = F.mse_loss(r_data.returns, values_pred)
                         value_losses.append(value_loss.item())
                         loss += value_loss
-                if self._sparse_second_loop:
+                if self._sparse_second_loop and self._kl_target_stat != "mean":
                     need_loss = (kl_div > self.target_kl)
                     if need_loss.any():
                         loss += loss_coeff_param.detach() * ((kl_div * need_loss).sum() / need_loss.sum())
@@ -499,6 +500,11 @@ class KLPOStbl(OnPolicyAlgorithm):
                     penalty_loops += 1
                     if skipped_minibatches == total_minibatches:
                         break
+                    if penalty_loops > SECOND_PENALTY_LOOP_MAX:
+                        print("Too many loops")
+                        self.policy.load_state_dict(self._old_policy.state_dict())
+                        self.logger.record("train/broke_loop", 1)
+                        break
             else:
                 while self._second_penalty_loop:
                     if self._kl_target_stat == "mean":
@@ -507,11 +513,16 @@ class KLPOStbl(OnPolicyAlgorithm):
                     elif self._kl_target_stat == "max":
                         if kl_div.max() <= self.target_kl:
                             break
+                    penalty_loops += 1
                     for historic_data in sample_partial_buffer(self.historic_buffer):
                         # This rollout_data is not used to compute KL div
                         kl_div = minibatch_step(rollout_data=historic_data, use_pg_loss=False)
-                        penalty_loops += 1
                         second_penalty_skip_ratio.append(0)
+                    if penalty_loops > SECOND_PENALTY_LOOP_MAX:
+                        print("Too many loops")
+                        self.policy.load_state_dict(self._old_policy.state_dict())
+                        self.logger.record("train/broke_loop", 1)
+                        break
             second_penalty_loops.append(penalty_loops)
 
             if not continue_training:
