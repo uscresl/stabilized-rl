@@ -260,10 +260,10 @@ class KLPOStbl(OnPolicyAlgorithm):
         """
         Update policy using the currently gathered rollout buffer.
         """
-        if self._train_calls % 10 == 0 and self._eval_policy:
-            eval_return_mean, eval_return_std = evaluate_policy(self.policy, self.env)
-            self.logger.record("rollout/EvalReturnMean", eval_return_mean)
-            self.logger.record("rollout/EvalReturnStd", eval_return_std)
+        # if self._train_calls % 10 == 0:
+        #     eval_return_mean, eval_return_std = evaluate_policy(self.policy, self.env)
+        #     self.logger.record("rollout/EvalReturnMean", eval_return_mean)
+        #     self.logger.record("rollout/EvalReturnStd", eval_return_std)
         self._train_calls += 1
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)
@@ -463,6 +463,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         # Save the current policy state and train
         self._old_policy.load_state_dict(self.policy.state_dict())
         # train for n_epochs epochs
+        self._old_policy.load_state_dict(self.policy.state_dict())
+
         for epoch in range(self.n_epochs):
             # Do a complete pass on the rollout buffer
             batch_adv_mean = self.rollout_buffer.advantages.mean()
