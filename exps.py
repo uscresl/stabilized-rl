@@ -530,11 +530,11 @@ if HOST == "brain.usc.edu":
             #         ),
             #     )
 elif HOST == "resl34":
-    GLOBAL_CONTEXT.max_concurrent_jobs = 2
+    GLOBAL_CONTEXT.max_concurrent_jobs = 3
     CORES = 3
-    total_steps = 1_000_000
+    total_steps = 3_000_000
     ram_gb = 6
-    batch_size = 64
+    batch_size = 512
     target_kl = 0.2
     kl_loss_coeff_lr = 10.0
     n_steps = 4096
@@ -577,6 +577,122 @@ elif HOST == "resl34":
         cores=CORES,
     )
     for seed in seeds:
+        for env in [
+            #"pick-place-v2",
+            "window-open-v2",
+            # "button-press-topdown-v2",
+            #"reach-v2",
+        ]:
+
+            total_steps: int = 5_000_000
+            ram_gb = 8
+            n_steps = 50000
+            gamma = 0.99
+            batch_size = 64
+            gae_lambda = 0.95
+            learning_rate = 5e-4
+            n_epochs = 10
+
+            # note = "basline_stbl_ppo"
+            # cmd(
+            #     "python",
+            #     "src/ppo_stbl_MT10.py",
+            #     "--seed",
+            #     seed,
+            #     "--env",
+            #     env,
+            #     "--total-steps",
+            #     total_steps,
+            #     "--n-steps",
+            #     n_steps,
+            #     "--gamma",
+            #     gamma,
+            #     "--batch-size",
+            #     batch_size,
+            #     "--gae-lambda",
+            #     gae_lambda,
+            #     "--learning-rate",
+            #     learning_rate,
+            #     "--n-epochs",
+            #     n_epochs,
+            #     "--note",
+            #     note,
+            #     "--log-dir",
+            #     Out(f"PPO_stbl_MT10_baseline/env={env}_seed={seed}_note={note}/"),
+            #     warmup_time=3,
+            #     ram_gb=ram_gb,
+            #     priority=(40, -seed),
+            #     cores=CORES,
+            # )
+
+            batch_size = 512
+            target_kl = 0.02
+            kl_loss_coeff_lr = 5.0
+            n_steps = 4096
+            note = "xppo_single_step_4096"
+            cmd(
+                "python",
+                "src/klpo_stbl_MT10.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--total-steps",
+                total_steps,
+                "--target-kl",
+                target_kl,
+                "--kl-loss-coeff-lr",
+                kl_loss_coeff_lr,
+                "--n-steps",
+                n_steps,
+                "--multi-step-trust-region=no",
+                "--note",
+                note,
+                "--log-dir",
+                Out(
+                    f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
+                ),
+                warmup_time=3,
+                ram_gb=ram_gb,
+                priority=(
+                    55,
+                    seed,
+                ),
+                cores=CORES,
+            )
+        total_steps = 3_000_000
+        env = "InvertedDoublePendulum-v2"
+        note = "xppo_single_step"
+        cmd(
+            "python",
+            "src/klpo_stbl_mujoco.py",
+            "--seed",
+            seed,
+            "--env",
+            env,
+            "--total-steps",
+            total_steps,
+            "--target-kl",
+            target_kl,
+            "--kl-loss-coeff-lr",
+            kl_loss_coeff_lr,
+            "--n-steps",
+            n_steps,
+            "--multi-step-trust-region=no",
+            "--note",
+            note,
+            "--log-dir",
+            Out(
+                f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
+            ),
+            warmup_time=3,
+            ram_gb=ram_gb,
+            priority=(
+                50,
+                -seed,
+            ),
+            cores=CORES,
+        )
         for env in mujoco_envs:
             total_steps = 1_000_000
             ram_gb = 6
