@@ -13,7 +13,7 @@ from metaworld.envs.mujoco.env_dict import MT10_V2
 import os
 
 SAVED_PICK_PLACE_MODEL_PATH = "./data/experiments/tmp/MT_10_klpo_stbl/env=pick-place-v2_seed=5555_target-kl=0.0015_kl-loss-coeff-lr=3.0_kl-loss-coeff-momentum=0.99999_historic-buffer-size=32000_note=tuned_xppo/saved_model.zip"
-SAVED_PICK_PLACE_WINDOW_OPEN = "./data/experiments/tmp/MT_10_klpo_stbl/env=window-open-v2_seed=3333_target-kl=0.0015_kl-loss-coeff-lr=3.0_kl-loss-coeff-momentum=0.99999_historic-buffer-size=32000_note=tuned_xppo/saved_model.zip"
+SAVED_WINDOW_OPEN = "./data/experiments/tmp/MT_10_klpo_stbl/env=window-open-v2_seed=3333_target-kl=0.0015_kl-loss-coeff-lr=3.0_kl-loss-coeff-momentum=0.99999_historic-buffer-size=32000_note=tuned_xppo/saved_model.zip"
 
 
 def gen_env(env: str):
@@ -39,6 +39,7 @@ def xppo_tranfer_MT10(
     clip_grad_norm=False,
     total_steps=3_000_000,
     note="buffer_kl_loss",
+    multi_step_trust_region=False,
     *,
     seed,
     target_kl: float,
@@ -71,9 +72,10 @@ def xppo_tranfer_MT10(
         historic_buffer_size=historic_buffer_size,
         reset_optimizers=reset_optimizers,
         second_penalty_loop=second_penalty_loop,
+        multi_step_trust_region=multi_step_trust_region,
     )
     random_value_net_sd = model.policy.value_net.state_dict()
-    model.set_parameters(SAVED_PICK_PLACE_WINDOW_OPEN)
+    model.set_parameters(SAVED_PICK_PLACE_MODEL_PATH)
     model.policy.value_net.load_state_dict(random_value_net_sd)
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
     model.set_logger(new_logger)
@@ -101,6 +103,7 @@ if __name__ == "__main__":
         kl_target_stat: str = "mean",
         n_steps: int = 4096,
         total_steps: int = 3_000_000,
+        multi_step_trust_region=False,
         reset_optimizers: bool,
         second_penalty_loop: bool,
     ):
@@ -122,4 +125,5 @@ if __name__ == "__main__":
             historic_buffer_size=historic_buffer_size,
             reset_optimizers=reset_optimizers,
             second_penalty_loop=second_penalty_loop,
+            multi_step_trust_region=multi_step_trust_region,
         )
