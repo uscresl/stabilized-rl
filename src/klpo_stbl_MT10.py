@@ -1,3 +1,4 @@
+from typing import Optional
 import clize
 
 from garage import wrap_experiment
@@ -54,6 +55,8 @@ def klpo_stbl_MT10(
     multi_step_trust_region,
     max_kl_loss_coeff,
     max_path_length,
+    early_stop_epoch: Optional[bool] = False,
+    early_stop_across_epochs: Optional[bool] = False,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -84,6 +87,8 @@ def klpo_stbl_MT10(
         multi_step_trust_region=multi_step_trust_region,
         max_kl_loss_coeff=max_kl_loss_coeff,
         eval_policy=False,
+        early_stop_epoch=early_stop_epoch,
+        early_stop_across_epochs=early_stop_across_epochs,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -106,7 +111,7 @@ if __name__ == "__main__":
         note: str,
         ent_coef: float = 0.0,
         kl_loss_coeff_lr: float = 3.0,
-        kl_loss_coeff_momentum: float = 0.9999, # Not used with adam
+        kl_loss_coeff_momentum: float = 0.9999,  # Not used with adam
         kl_target_stat: str = "max",
         n_steps: int = 4096,
         batch_size: int = 512,
@@ -117,12 +122,14 @@ if __name__ == "__main__":
         sparse_second_loop: bool = True,
         normalize_advantage: bool = False,
         second_penalty_loop: bool = True,
-        total_steps: int=3_000_000,
-        second_loop_batch_size: int=16000,
+        total_steps: int = 3_000_000,
+        second_loop_batch_size: int = 16000,
         historic_buffer_size: int = 32000,
         second_loop_vf: bool = False,
         multi_step_trust_region: bool = True,
         max_kl_loss_coeff: int = 2**20,
+        early_stop_epoch: bool = False,
+        early_stop_across_epochs: bool = False,
     ):
         env, max_path_length = gen_env(env)
         klpo_stbl_MT10(
@@ -152,4 +159,6 @@ if __name__ == "__main__":
             multi_step_trust_region=multi_step_trust_region,
             max_kl_loss_coeff=max_kl_loss_coeff,
             max_path_length=max_path_length,
+            early_stop_epoch=early_stop_epoch,
+            early_stop_across_epochs=early_stop_across_epochs,
         )

@@ -15,7 +15,12 @@ from stable_baselines3.common.policies import (
     BasePolicy,
     MultiInputActorCriticPolicy,
 )
-from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule, RolloutBufferSamples
+from stable_baselines3.common.type_aliases import (
+    GymEnv,
+    MaybeCallback,
+    Schedule,
+    RolloutBufferSamples,
+)
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.utils import (
     explained_variance,
@@ -139,6 +144,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         max_kl_loss_coeff: int = 2**20,
         eval_policy: bool = False,
         debug_output_directory: Optional[str] = None,
+        early_stop_epoch: Optional[bool] = False,
+        early_stop_across_epochs: Optional[bool] = False,
     ):
 
         super().__init__(
@@ -242,6 +249,9 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._eval_policy = eval_policy
         self._debug_output_directory = debug_output_directory
 
+        self._early_stop_epoch = early_stop_epoch
+        self._early_stop_across_epochs = early_stop_across_epochs
+
     def _setup_model(self) -> None:
         super()._setup_model()
 
@@ -303,7 +313,9 @@ class KLPOStbl(OnPolicyAlgorithm):
         if self._reset_optimizers:
             with th.no_grad():
                 self._kl_loss_coeff_param.copy_(1.0)
-            self._kl_loss_coeff_opt.load_state_dict(self._initial_kl_loss_coeff_state_dict)
+            self._kl_loss_coeff_opt.load_state_dict(
+                self._initial_kl_loss_coeff_state_dict
+            )
         kl_divs = []
         full_kl_divs = []
         full_max_kl_divs = []
@@ -395,7 +407,7 @@ class KLPOStbl(OnPolicyAlgorithm):
             if use_pg_loss:
                 loss += loss_coeff_param.detach() * kl_div.mean()
             else:
-                loss = th.tensor(0.).to(self.device)
+                loss = th.tensor(0.0).to(self.device)
                 if self._second_loop_vf:
                     for r_data in sample_partial_buffer(self.rollout_buffer):
                         acts = r_data.actions
@@ -411,9 +423,11 @@ class KLPOStbl(OnPolicyAlgorithm):
                         value_losses.append(value_loss.item())
                         loss += value_loss
                 if self._sparse_second_loop and self._kl_target_stat != "mean":
-                    need_loss = (kl_div > self.target_kl)
+                    need_loss = kl_div > self.target_kl
                     if need_loss.any():
-                        loss += loss_coeff_param.detach() * ((kl_div * need_loss).sum() / need_loss.sum())
+                        loss += loss_coeff_param.detach() * (
+                            (kl_div * need_loss).sum() / need_loss.sum()
+                        )
                     else:
                         return kl_div
                 else:
@@ -459,7 +473,9 @@ class KLPOStbl(OnPolicyAlgorithm):
                     assert self._kl_loss_coeff_param >= 1 + MIN_KL_LOSS_COEFF
                 elif self._kl_loss_coeff_param > np.log2(self._max_kl_loss_coeff):
                     with th.no_grad():
-                        self._kl_loss_coeff_param.copy_(np.log2(self._max_kl_loss_coeff))
+                        self._kl_loss_coeff_param.copy_(
+                            np.log2(self._max_kl_loss_coeff)
+                        )
             else:
                 if self._kl_loss_coeff_param < MIN_KL_LOSS_COEFF:
                     with th.no_grad():
@@ -468,7 +484,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                 elif self._kl_loss_coeff_param > self._max_kl_loss_coeff:
                     with th.no_grad():
                         self._kl_loss_coeff_param.copy_(self._max_kl_loss_coeff)
-            #kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
+            # kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
             return kl_div
 
         second_penalty_loops = []
@@ -481,7 +497,6 @@ class KLPOStbl(OnPolicyAlgorithm):
         first_loop_minibatches = []
         # train for n_epochs epochs
         self._old_policy.load_state_dict(self.policy.state_dict())
-
         for epoch in range(self.n_epochs):
             # Do a complete pass on the rollout buffer
             batch_adv_mean = self.rollout_buffer.advantages.mean()
@@ -501,6 +516,26 @@ class KLPOStbl(OnPolicyAlgorithm):
             n_first_loop_minibatch = 0
             for rollout_data in self.rollout_buffer.get(self.batch_size):
                 kl_div = minibatch_step(rollout_data=rollout_data, use_pg_loss=True)
+
+                if (
+                    self._early_stop_epoch or self._early_stop_across_epochs
+                ):  # Early stop the current epoch.
+                    if self._kl_target_stat == "mean":
+                        kl_stat = kl_div.mean().detach()
+                    elif self._kl_target_stat == "max":
+                        kl_stat = kl_div.max().detach()
+                    else:
+                        raise ValueError("Invalid kl_target_stat")
+                    if kl_stat > self.target_kl:
+                        n_first_loop_minibatch += 1
+                        self.logger.debug("Early stopping the current epoch.")
+
+                        if (
+                            self._early_stop_across_epochs
+                        ):  # Will exit training and gather a new training batch after second penalty loop
+                            continue_training = False
+                            self.logger.debug("Early stopping across epochs.")
+                        break
                 n_first_loop_minibatch += 1
 
             penalty_loops = 0
@@ -511,22 +546,29 @@ class KLPOStbl(OnPolicyAlgorithm):
                 while self._second_penalty_loop:
                     skipped_minibatches = 0
                     total_minibatches = 0
-                    for historic_data in sample_partial_buffer(self.historic_buffer,
-                                                               self._second_loop_batch_size):
+                    for historic_data in sample_partial_buffer(
+                        self.historic_buffer, self._second_loop_batch_size
+                    ):
                         total_minibatches += 1
-                        kl_div = minibatch_step(rollout_data=historic_data,
-                                                use_pg_loss=False)
+                        kl_div = minibatch_step(
+                            rollout_data=historic_data, use_pg_loss=False
+                        )
                         if (kl_div <= self.target_kl).all():
                             second_loop_skips.append(True)
                             skipped_minibatches += 1
-                        elif self._kl_target_stat == "mean" and kl_div.mean() <= self.target_kl:
+                        elif (
+                            self._kl_target_stat == "mean"
+                            and kl_div.mean() <= self.target_kl
+                        ):
                             second_loop_skips.append(True)
                             skipped_minibatches += 1
                         else:
                             second_loop_skips.append(False)
                             n_second_loop_backward += 1
                         n_second_loop_minibatch += 1
-                    second_penalty_skip_ratio.append(skipped_minibatches / total_minibatches)
+                    second_penalty_skip_ratio.append(
+                        skipped_minibatches / total_minibatches
+                    )
                     penalty_loops += 1
                     if skipped_minibatches == total_minibatches:
                         break
@@ -546,7 +588,9 @@ class KLPOStbl(OnPolicyAlgorithm):
                     penalty_loops += 1
                     for historic_data in sample_partial_buffer(self.historic_buffer):
                         # This rollout_data is not used to compute KL div
-                        kl_div = minibatch_step(rollout_data=historic_data, use_pg_loss=False)
+                        kl_div = minibatch_step(
+                            rollout_data=historic_data, use_pg_loss=False
+                        )
                         second_penalty_skip_ratio.append(0)
                     if penalty_loops > SECOND_PENALTY_LOOP_MAX:
                         print("Too many loops")
@@ -578,18 +622,24 @@ class KLPOStbl(OnPolicyAlgorithm):
             full_kl_divs.append(full_batch_kl_div.mean().item())
             full_max_kl_divs.append(full_batch_kl_div.max().item())
 
-            with open(f"{self._debug_output_directory}/step_{self._train_calls}.pkl", "wb") as f:
+            with open(
+                f"{self._debug_output_directory}/step_{self._train_calls}.pkl", "wb"
+            ) as f:
                 import pickle
-                pickle.dump({
-                    'kl_divs': kl_divs,
-                    'full_kl_divs': full_kl_divs,
-                    'full_max_kl_divs': full_max_kl_divs,
-                    'first_loop_minibatches': first_loop_minibatches,
-                    'second_loop_minibatches': second_loop_minibatches,
-                    'second_loop_backwards': second_loop_backwards,
-                    'second_loop_all_skips': second_loop_all_skips,
-                    'kl_loss_coeffs': kl_loss_coeffs,
-                }, f)
+
+                pickle.dump(
+                    {
+                        "kl_divs": kl_divs,
+                        "full_kl_divs": full_kl_divs,
+                        "full_max_kl_divs": full_max_kl_divs,
+                        "first_loop_minibatches": first_loop_minibatches,
+                        "second_loop_minibatches": second_loop_minibatches,
+                        "second_loop_backwards": second_loop_backwards,
+                        "second_loop_all_skips": second_loop_all_skips,
+                        "kl_loss_coeffs": kl_loss_coeffs,
+                    },
+                    f,
+                )
 
         self._n_updates += self.n_epochs
         explained_var = explained_variance(
@@ -606,8 +656,17 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.logger.record("train/final_kl_div", kl_divs[-1])
         self.logger.record("train/final_max_kl_div", kl_div.max().item())
         self.logger.record("train/kl_div", np.mean(kl_divs))
+        self.logger.record(
+            "train/first_loop_minibatches", np.mean(first_loop_minibatches)
+        )
+        self.logger.record(
+            "train/second_loop_minibatches", np.mean(second_loop_minibatches)
+        )
+
         if second_penalty_loops:
-            self.logger.record("train/final_second_penalty_loops", second_penalty_loops[-1])
+            self.logger.record(
+                "train/final_second_penalty_loops", second_penalty_loops[-1]
+            )
             self.logger.record(
                 "train/mean_second_penalty_loops", np.mean(second_penalty_loops)
             )
@@ -616,7 +675,8 @@ class KLPOStbl(OnPolicyAlgorithm):
             )
         if second_penalty_skip_ratio:
             self.logger.record(
-                "train/mean_second_penalty_skip_ratio", np.mean(second_penalty_skip_ratio)
+                "train/mean_second_penalty_skip_ratio",
+                np.mean(second_penalty_skip_ratio),
             )
             self.logger.record(
                 "train/max_second_penalty_skip_ratio", np.max(second_penalty_skip_ratio)
@@ -829,6 +889,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.logger.record("rollout/SuccessRate", n_successes / n_episodes)
         return True
 
+
 def sample_partial_buffer(buffer, batch_size: Optional[int] = None):
     if buffer.full:
         indices = np.random.permutation(buffer.buffer_size * buffer.n_envs)
@@ -851,5 +912,7 @@ def sample_partial_buffer(buffer, batch_size: Optional[int] = None):
             buffer.advantages[batch_inds],
             buffer.returns[batch_inds],
         )
-        yield RolloutBufferSamples(*tuple([buffer.to_torch(d).squeeze(1) for d in data]))
+        yield RolloutBufferSamples(
+            *tuple([buffer.to_torch(d).squeeze(1) for d in data])
+        )
         start_idx += batch_size
