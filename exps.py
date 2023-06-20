@@ -38,6 +38,7 @@ ppo_env_names_v3 = [
 if HOST == "brain.usc.edu":
     CORES = 7
     for seed in seeds:
+        pass
         # for env in [
         #     "pick-place-v2",
         #     "window-open-v2",
@@ -413,7 +414,7 @@ if HOST == "brain.usc.edu":
                 "--n-steps",
                 n_steps,
                 "--multi-step-trust-region=no",
-                "--early-stop-across-epoch",
+                "--early-stop-across-epochs",
                 "--note",
                 note,
                 "--log-dir",
@@ -447,7 +448,7 @@ if HOST == "brain.usc.edu":
                 n_steps,
                 "--multi-step-trust-region=no",
                 "--early-stop-epoch",
-                "--early-stop-across-epoch",
+                "--early-stop-across-epochs",
                 "--note",
                 note,
                 "--log-dir",
