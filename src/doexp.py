@@ -1,14 +1,14 @@
+#!/usr/bin/env python3
 from dataclasses import dataclass, field, replace
-from typing import Type, Union, List, Tuple
+from typing import Union, List, Tuple, Optional
 import os
 import re
 import subprocess
-from numpy import isin
 import psutil
 import time
 import shutil
 import math
-import random
+import sys
 
 
 @dataclass(frozen=True)
@@ -395,4 +395,7 @@ def cmd(
 
 
 if __name__ == "__main__":
-    print("Run src/runexp.py instead")
+    sys.modules["doexp"] = sys.modules["__main__"]
+    import doexp
+    assert doexp.GLOBAL_CONTEXT is GLOBAL_CONTEXT
+    doexp.GLOBAL_CONTEXT.run_all()
