@@ -38,6 +38,8 @@ def klpo_stbl(
     multi_step_trust_region,
     max_kl_loss_coeff,
     debug_output_directory,
+    early_stop_epoch,
+    early_stop_across_epochs,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -68,6 +70,8 @@ def klpo_stbl(
         max_kl_loss_coeff=max_kl_loss_coeff,
         eval_policy=True,
         debug_output_directory=debug_output_directory,
+        early_stop_epoch=early_stop_epoch,
+        early_stop_across_epochs=early_stop_across_epochs,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -105,6 +109,8 @@ if __name__ == "__main__":
         multi_step_trust_region: bool = True,
         max_kl_loss_coeff: int = 2**20,
         debug_outdir: str = None,
+        early_stop_epoch: bool = False,
+        early_stop_across_epochs: bool = False,
     ):
         klpo_stbl(
             dict(log_dir=log_dir),
@@ -133,4 +139,6 @@ if __name__ == "__main__":
             multi_step_trust_region=multi_step_trust_region,
             max_kl_loss_coeff=max_kl_loss_coeff,
             debug_output_directory=debug_outdir,
+            early_stop_epoch=early_stop_epoch,
+            early_stop_across_epochs=early_stop_across_epochs,
         )
