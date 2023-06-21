@@ -662,6 +662,27 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.logger.record(
             "train/second_loop_minibatches", np.mean(second_loop_minibatches)
         )
+        self.logger.record(
+            "train/first_loop_minibatches_min", np.min(first_loop_minibatches)
+        )
+        self.logger.record(
+            "train/second_loop_minibatches_min", np.min(second_loop_minibatches)
+        )
+        self.logger.record(
+            "train/first_loop_minibatches_max", np.max(first_loop_minibatches)
+        )
+        self.logger.record(
+            "train/second_loop_minibatches_max", np.max(second_loop_minibatches)
+        )
+        self.logger.record(
+            "train/first_loop_minibatches_total", np.sum(first_loop_minibatches)
+        )
+        self.logger.record(
+            "train/second_loop_minibatches_total", np.sum(second_loop_minibatches)
+        )
+        self.logger.record(
+            "train/minibatches_total", np.sum(first_loop_minibatches) + np.sum(second_loop_minibatches)
+        )
 
         if second_penalty_loops:
             self.logger.record(
