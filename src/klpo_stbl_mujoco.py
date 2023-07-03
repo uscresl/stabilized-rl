@@ -40,6 +40,7 @@ def klpo_stbl(
     debug_output_directory,
     early_stop_epoch,
     early_stop_across_epochs,
+    n_epochs,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -72,6 +73,7 @@ def klpo_stbl(
         debug_output_directory=debug_output_directory,
         early_stop_epoch=early_stop_epoch,
         early_stop_across_epochs=early_stop_across_epochs,
+        n_epochs=n_epochs,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -111,6 +113,7 @@ if __name__ == "__main__":
         debug_outdir: str = None,
         early_stop_epoch: bool = False,
         early_stop_across_epochs: bool = False,
+        n_epochs: int = 10,
     ):
         klpo_stbl(
             dict(log_dir=log_dir),
@@ -141,4 +144,5 @@ if __name__ == "__main__":
             debug_output_directory=debug_outdir,
             early_stop_epoch=early_stop_epoch,
             early_stop_across_epochs=early_stop_across_epochs,
+            n_epochs=n_epochs,
         )

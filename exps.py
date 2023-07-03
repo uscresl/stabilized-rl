@@ -35,10 +35,70 @@ ppo_env_names_v3 = [
     "Reacher-v2",
 ]
 
+total_steps_for_env = {
+    "HalfCheetah-v2": 3_000_000,
+    "Hopper-v2": 10_000_000,
+    "Walker2d-v2": 10_000_000,
+}
+
+
+def xppo_mujoco(seed, env, note, priority=None, cores=7, **kwargs):
+    total_steps = total_steps_for_env.get(env, 20_000_000)
+    if priority is None:
+        priority = (50, total_steps, -seed)
+    kwargs_path = '_'.join(f"{k.replace('_', '-')}={v}" for (k, v) in kwargs.items())
+    return cmd(
+        "python",
+        "src/klpo_stbl_mujoco.py",
+        "--seed",
+        seed,
+        "--env",
+        env,
+        "--total-steps",
+        total_steps,
+        "--note",
+        note,
+        "--log-dir",
+        Out(
+            f"klpo_stbl/env={env}_seed={seed}_{kwargs_path}_note={note}/"
+        ),
+        warmup_time=3,
+        ram_gb=6,
+        priority=priority,
+        cores=cores,
+    )
+
+
+def xppo_mt10(seed, env, note, priority=None, cores=7, **kwargs):
+    total_steps = total_steps_for_env.get(env, 20_000_000)
+    if priority is None:
+        priority = (50, total_steps, -seed)
+    kwargs_path = '_'.join(f"{k.replace('_', '-')}={v}" for (k, v) in kwargs.items())
+    return cmd(
+        "python",
+        "src/ppo_stbl_MT10.py",
+        "--seed",
+        seed,
+        "--env",
+        env,
+        "--total-steps",
+        total_steps,
+        "--note",
+        note,
+        "--log-dir",
+        Out(
+            f"klpo_stbl/env={env}_seed={seed}_{kwargs_path}_note={note}/"
+        ),
+        warmup_time=3,
+        ram_gb=8,
+        priority=priority,
+        cores=cores,
+    )
+
+
 if HOST == "brain.usc.edu":
     CORES = 7
     for seed in seeds:
-        pass
         # for env in [
         #     "pick-place-v2",
         #     "window-open-v2",
@@ -300,9 +360,15 @@ if HOST == "brain.usc.edu":
         #             -seed,
         #         ),
         #     )
+        pass
 
     for seed in seeds:
         for env in mujoco_envs:
+            for early_stop_epoch in ["yes", "no"]:
+                for n_steps in [10, 20, 30, 100]:
+                    xppo_mujoco(seed=seed, env=env, note="xppo_n_step_sweep",
+                                n_steps=n_steps, early_stop_epoch=early_stop_epoch)
+
             total_steps = 10_000_000
             if env == "HalfCheetah-v2":
                 total_steps = 3_000_000
