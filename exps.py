@@ -13,9 +13,11 @@ HOST = gethostname()
 
 if HOST == "brain.usc.edu":
     # GLOBAL_CONTEXT.max_concurrent_jobs = 190
-    GLOBAL_CONTEXT.max_concurrent_jobs = 50
+    # GLOBAL_CONTEXT.max_concurrent_jobs = 50
+    GLOBAL_CONTEXT.max_concurrent_jobs = 100
     # GLOBAL_CONTEXT.max_core_alloc = 432
-    GLOBAL_CONTEXT.max_core_alloc = 150
+    # GLOBAL_CONTEXT.max_core_alloc = 150
+    GLOBAL_CONTEXT.max_core_alloc = 300
 
 mujoco_envs = [
     # "InvertedDoublePendulum-v2",
@@ -56,6 +58,7 @@ def xppo_mujoco(seed, env, note, priority=None, cores=7, **kwargs):
         env,
         "--total-steps",
         total_steps,
+        *[f"--{k.replace('_', '-')}={v}" for (k,v) in kwargs.items()],
         "--note",
         note,
         "--log-dir",
@@ -83,6 +86,7 @@ def xppo_mt10(seed, env, note, priority=None, cores=7, **kwargs):
         env,
         "--total-steps",
         total_steps,
+        *[f"--{k.replace('_', '-')}={v}" for (k,v) in kwargs.items()],
         "--note",
         note,
         "--log-dir",
@@ -365,170 +369,171 @@ if HOST == "brain.usc.edu":
     for seed in seeds:
         for env in mujoco_envs:
             for early_stop_epoch in ["yes", "no"]:
-                for n_steps in [10, 20, 30, 100]:
-                    xppo_mujoco(seed=seed, env=env, note="xppo_n_step_sweep",
-                                n_steps=n_steps, early_stop_epoch=early_stop_epoch)
+                for n_epochs in [10, 20, 30, 100]:
+                    xppo_mujoco(seed=seed, env=env, note="xppo_n_epochs_sweep",
+                                target_kl=0.2,
+                                n_epochs=n_epochs, early_stop_epoch=early_stop_epoch)
 
-            total_steps = 10_000_000
-            if env == "HalfCheetah-v2":
-                total_steps = 3_000_000
-            note = "baseline_ppo_10m"
-            cmd(
-                "python",
-                "src/ppo_stbl_mujoco.py",
-                "--seed",
-                seed,
-                "--env",
-                env,
-                "--total-steps",
-                total_steps,
-                "--note",
-                note,
-                "--log-dir",
-                Out(f"ppo_stbl/env={env}_seed={seed}_note={note}/"),
-                priority=(
-                    48,
-                    int(env in ["Walker2d-v2", "Hopper-v2"]),
-                    -seed,
-                ),
-                cores=CORES,
-            )
-            ram_gb = 6
-            batch_size = 512
-            target_kl = 0.2
-            kl_loss_coeff_lr = 5.0
-            n_steps = 4096
-            note = "xppo_single_step"
-            cmd(
-                "python",
-                "src/klpo_stbl_mujoco.py",
-                "--seed",
-                seed,
-                "--env",
-                env,
-                "--total-steps",
-                total_steps,
-                "--target-kl",
-                target_kl,
-                "--kl-loss-coeff-lr",
-                kl_loss_coeff_lr,
-                "--n-steps",
-                n_steps,
-                "--multi-step-trust-region=no",
-                "--note",
-                note,
-                "--log-dir",
-                Out(
-                    f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
-                ),
-                warmup_time=3,
-                ram_gb=ram_gb,
-                priority=(
-                    50,
-                    -seed,
-                ),
-                cores=CORES,
-            )
+            # total_steps = 10_000_000
+            # if env == "HalfCheetah-v2":
+            #     total_steps = 3_000_000
+            # note = "baseline_ppo_10m"
+            # cmd(
+            #     "python",
+            #     "src/ppo_stbl_mujoco.py",
+            #     "--seed",
+            #     seed,
+            #     "--env",
+            #     env,
+            #     "--total-steps",
+            #     total_steps,
+            #     "--note",
+            #     note,
+            #     "--log-dir",
+            #     Out(f"ppo_stbl/env={env}_seed={seed}_note={note}/"),
+            #     priority=(
+            #         48,
+            #         int(env in ["Walker2d-v2", "Hopper-v2"]),
+            #         -seed,
+            #     ),
+            #     cores=CORES,
+            # )
+            # ram_gb = 6
+            # batch_size = 512
+            # target_kl = 0.2
+            # kl_loss_coeff_lr = 5.0
+            # n_steps = 4096
+            # note = "xppo_single_step"
+            # cmd(
+            #     "python",
+            #     "src/klpo_stbl_mujoco.py",
+            #     "--seed",
+            #     seed,
+            #     "--env",
+            #     env,
+            #     "--total-steps",
+            #     total_steps,
+            #     "--target-kl",
+            #     target_kl,
+            #     "--kl-loss-coeff-lr",
+            #     kl_loss_coeff_lr,
+            #     "--n-steps",
+            #     n_steps,
+            #     "--multi-step-trust-region=no",
+            #     "--note",
+            #     note,
+            #     "--log-dir",
+            #     Out(
+            #         f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
+            #     ),
+            #     warmup_time=3,
+            #     ram_gb=ram_gb,
+            #     priority=(
+            #         50,
+            #         -seed,
+            #     ),
+            #     cores=CORES,
+            # )
 
-            note = "xppo_mujoco_early_stop_within_epoch"
-            cmd(
-                "python",
-                "src/klpo_stbl_mujoco.py",
-                "--seed",
-                seed,
-                "--env",
-                env,
-                "--total-steps",
-                total_steps,
-                "--target-kl",
-                target_kl,
-                "--kl-loss-coeff-lr",
-                kl_loss_coeff_lr,
-                "--n-steps",
-                n_steps,
-                "--multi-step-trust-region=no",
-                "--early-stop-epoch",
-                "--note",
-                note,
-                "--log-dir",
-                Out(
-                    f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
-                ),
-                warmup_time=3,
-                ram_gb=ram_gb,
-                priority=(
-                    51,
-                    -seed,
-                ),
-                cores=CORES,
-            )
+            # note = "xppo_mujoco_early_stop_within_epoch"
+            # cmd(
+            #     "python",
+            #     "src/klpo_stbl_mujoco.py",
+            #     "--seed",
+            #     seed,
+            #     "--env",
+            #     env,
+            #     "--total-steps",
+            #     total_steps,
+            #     "--target-kl",
+            #     target_kl,
+            #     "--kl-loss-coeff-lr",
+            #     kl_loss_coeff_lr,
+            #     "--n-steps",
+            #     n_steps,
+            #     "--multi-step-trust-region=no",
+            #     "--early-stop-epoch",
+            #     "--note",
+            #     note,
+            #     "--log-dir",
+            #     Out(
+            #         f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
+            #     ),
+            #     warmup_time=3,
+            #     ram_gb=ram_gb,
+            #     priority=(
+            #         51,
+            #         -seed,
+            #     ),
+            #     cores=CORES,
+            # )
 
-            note = "xppo_mujoco_early_stop_across_epoch"
-            cmd(
-                "python",
-                "src/klpo_stbl_mujoco.py",
-                "--seed",
-                seed,
-                "--env",
-                env,
-                "--total-steps",
-                total_steps,
-                "--target-kl",
-                target_kl,
-                "--kl-loss-coeff-lr",
-                kl_loss_coeff_lr,
-                "--n-steps",
-                n_steps,
-                "--multi-step-trust-region=no",
-                "--early-stop-across-epochs",
-                "--note",
-                note,
-                "--log-dir",
-                Out(
-                    f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
-                ),
-                warmup_time=3,
-                ram_gb=ram_gb,
-                priority=(
-                    51,
-                    -seed,
-                ),
-                cores=CORES,
-            )
+            # note = "xppo_mujoco_early_stop_across_epoch"
+            # cmd(
+            #     "python",
+            #     "src/klpo_stbl_mujoco.py",
+            #     "--seed",
+            #     seed,
+            #     "--env",
+            #     env,
+            #     "--total-steps",
+            #     total_steps,
+            #     "--target-kl",
+            #     target_kl,
+            #     "--kl-loss-coeff-lr",
+            #     kl_loss_coeff_lr,
+            #     "--n-steps",
+            #     n_steps,
+            #     "--multi-step-trust-region=no",
+            #     "--early-stop-across-epochs",
+            #     "--note",
+            #     note,
+            #     "--log-dir",
+            #     Out(
+            #         f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
+            #     ),
+            #     warmup_time=3,
+            #     ram_gb=ram_gb,
+            #     priority=(
+            #         51,
+            #         -seed,
+            #     ),
+            #     cores=CORES,
+            # )
 
-            note = "xppo_mujoco_early_stop_both"
-            cmd(
-                "python",
-                "src/klpo_stbl_mujoco.py",
-                "--seed",
-                seed,
-                "--env",
-                env,
-                "--total-steps",
-                total_steps,
-                "--target-kl",
-                target_kl,
-                "--kl-loss-coeff-lr",
-                kl_loss_coeff_lr,
-                "--n-steps",
-                n_steps,
-                "--multi-step-trust-region=no",
-                "--early-stop-epoch",
-                "--early-stop-across-epochs",
-                "--note",
-                note,
-                "--log-dir",
-                Out(
-                    f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
-                ),
-                warmup_time=3,
-                ram_gb=ram_gb,
-                priority=(
-                    51,
-                    -seed,
-                ),
-                cores=CORES,
-            )
+            # note = "xppo_mujoco_early_stop_both"
+            # cmd(
+            #     "python",
+            #     "src/klpo_stbl_mujoco.py",
+            #     "--seed",
+            #     seed,
+            #     "--env",
+            #     env,
+            #     "--total-steps",
+            #     total_steps,
+            #     "--target-kl",
+            #     target_kl,
+            #     "--kl-loss-coeff-lr",
+            #     kl_loss_coeff_lr,
+            #     "--n-steps",
+            #     n_steps,
+            #     "--multi-step-trust-region=no",
+            #     "--early-stop-epoch",
+            #     "--early-stop-across-epochs",
+            #     "--note",
+            #     note,
+            #     "--log-dir",
+            #     Out(
+            #         f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
+            #     ),
+            #     warmup_time=3,
+            #     ram_gb=ram_gb,
+            #     priority=(
+            #         51,
+            #         -seed,
+            #     ),
+            #     cores=CORES,
+            # )
 
             # total_steps = 3_000_000
             # note = "one-phase_single_step"
