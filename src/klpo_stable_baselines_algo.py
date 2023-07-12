@@ -421,7 +421,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                         # Value loss using the TD(gae_lambda) target
                         value_loss = F.mse_loss(r_data.returns, values_pred)
                         value_losses.append(value_loss.item())
-                        loss += value_loss
+                        loss += self.vf_coef * value_loss
                 if self._sparse_second_loop and self._kl_target_stat != "mean":
                     need_loss = kl_div > self.target_kl
                     if need_loss.any():
