@@ -44,11 +44,17 @@ total_steps_for_env = {
 }
 
 
-def xppo_mujoco(seed, env, note, priority=None, cores=7, **kwargs):
+def xppo_mujoco(
+    seed, env, note, priority=None, cores=7, add_to_path: list = None, **kwargs
+):
     total_steps = total_steps_for_env.get(env, 20_000_000)
     if priority is None:
         priority = (50, total_steps, -seed)
-    kwargs_path = '_'.join(f"{k.replace('_', '-')}={v}" for (k, v) in kwargs.items())
+    if add_to_path is None:
+        add_to_path = [k for k, _ in kwargs.items()][:5]
+    kwargs_path = "_".join(
+        f"{k.replace('_', '-')}={kwargs.get(k)}" for k in add_to_path
+    )
     return cmd(
         "python",
         "src/klpo_stbl_mujoco.py",
@@ -58,13 +64,11 @@ def xppo_mujoco(seed, env, note, priority=None, cores=7, **kwargs):
         env,
         "--total-steps",
         total_steps,
-        *[f"--{k.replace('_', '-')}={v}" for (k,v) in kwargs.items()],
+        *[f"--{k.replace('_', '-')}={v}" for (k, v) in kwargs.items()],
         "--note",
         note,
         "--log-dir",
-        Out(
-            f"klpo_stbl/env={env}_seed={seed}_{kwargs_path}_note={note}/"
-        ),
+        Out(f"klpo_stbl/env={env}_seed={seed}_{kwargs_path}_note={note}/"),
         warmup_time=3,
         ram_gb=6,
         priority=priority,
@@ -72,27 +76,35 @@ def xppo_mujoco(seed, env, note, priority=None, cores=7, **kwargs):
     )
 
 
-def xppo_mt10(seed, env, note, priority=None, cores=7, **kwargs):
-    total_steps = total_steps_for_env.get(env, 20_000_000)
+def xppo_mt10(
+    seed, env, note, priority=None, cores=7, add_to_path: list = None, **kwargs
+):
+    if kwargs.get("total_steps"):
+        total_steps = kwargs.pop("total_steps")
+    else:
+        total_steps = total_steps_for_env.get(env, 20_000_000)
+
     if priority is None:
         priority = (50, total_steps, -seed)
-    kwargs_path = '_'.join(f"{k.replace('_', '-')}={v}" for (k, v) in kwargs.items())
+    if add_to_path is None:
+        add_to_path = [k for k, _ in kwargs.items()][:5]
+    kwargs_path = "_".join(
+        f"{k.replace('_', '-')}={kwargs.get(k)}" for k in add_to_path
+    )
     return cmd(
         "python",
-        "src/ppo_stbl_MT10.py",
+        "src/klpo_stbl_MT10.py",
         "--seed",
         seed,
         "--env",
         env,
         "--total-steps",
         total_steps,
-        *[f"--{k.replace('_', '-')}={v}" for (k,v) in kwargs.items()],
+        *[f"--{k.replace('_', '-')}={v}" for (k, v) in kwargs.items()],
         "--note",
         note,
         "--log-dir",
-        Out(
-            f"klpo_stbl/env={env}_seed={seed}_{kwargs_path}_note={note}/"
-        ),
+        Out(f"klpo_stbl/env={env}_seed={seed}_{kwargs_path}_note={note}/"),
         warmup_time=3,
         ram_gb=8,
         priority=priority,
@@ -119,8 +131,14 @@ if HOST == "brain.usc.edu":
             #                     n_epochs=n_epochs, early_stop_epoch=early_stop_epoch)
             for vf_coef in [0.01, 0.1, 0.25, 0.5, 1.0]:
                 for second_loop_vf in [False, True]:
-                    xppo_mujoco(seed=seed, env=env, note="vf_coef_sweep", target_kl=0.2,
-                                vf_coef=vf_coef, second_loop_vf=second_loop_vf)
+                    xppo_mujoco(
+                        seed=seed,
+                        env=env,
+                        note="vf_coef_sweep",
+                        target_kl=0.2,
+                        vf_coef=vf_coef,
+                        second_loop_vf=second_loop_vf,
+                    )
 elif HOST == "resl34":
     GLOBAL_CONTEXT.max_concurrent_jobs = 3
     CORES = 3
@@ -686,6 +704,38 @@ elif HOST == "resl34":
 elif HOST == "stygian":
     GLOBAL_CONTEXT.max_concurrent_jobs = 4
     ram_gb = 4
+    for seed in seeds[:2]:
+        for env, total_steps in [
+            # ("pick-place-v2", 20_000_000),
+            ("window-open-v2", 7_000_000),
+            # ("button-press-topdown-v2", 7_000_000),
+            # ("reach-v2", 7_000_000),
+            # ("push-v2", 7_000_000),
+        ]:
+            for max_kl_loss_coeff in [5, 10, 20, 30, 50, 100]:
+                xppo_mt10(
+                    seed=seed,
+                    env=env,
+                    note="bang_bang_mt10",
+                    add_to_path=[
+                        "target_kl",
+                        "max_kl_loss_coeff",
+                        "early_stop_epoch",
+                        "kl_loss_coeff_lr",
+                    ],
+                    target_kl=0.02,
+                    max_kl_loss_coeff=max_kl_loss_coeff,
+                    kl_target_stat="max",
+                    ent_coef=0.0,
+                    kl_loss_coeff_lr=5.0,
+                    kl_loss_coeff_momentum=0.99999,
+                    historic_buffer_size=48_000,
+                    second_loop_batch_size=24_000,
+                    batch_size=256,
+                    total_steps=total_steps,
+                    bang_bang_kl_loss_opt=True,
+                    early_stop_epoch=True,
+                )
     # for seed in seeds:
     #     for env in [
     #         # "pick-place-v2",
@@ -777,134 +827,134 @@ elif HOST == "stygian":
     #             ram_gb=ram_gb,
     #             priority=(-seed, 37),
     #         )
-    for seed in seeds:
-        for env, total_steps in [
-            ("pick-place-v2", 20_000_000),
-            # ("window-open-v2", 7_000_000),
-            # ("button-press-topdown-v2", 7_000_000),
-            # ("reach-v2", 7_000_000),
-            # ("push-v2", 7_000_000),
-        ]:
-            target_kl = 0.02
-            note = "xppo_early_stop_within_epoch"
-            optimize_log_loss_coeff = False
-            second_penalty_loop = True
-            reset_optimizers = True
+    # for seed in seeds:
+    #     for env, total_steps in [
+    #         ("pick-place-v2", 20_000_000),
+    #         # ("window-open-v2", 7_000_000),
+    #         # ("button-press-topdown-v2", 7_000_000),
+    #         # ("reach-v2", 7_000_000),
+    #         # ("push-v2", 7_000_000),
+    #     ]:
+    #         target_kl = 0.02
+    #         note = "xppo_early_stop_within_epoch"
+    #         optimize_log_loss_coeff = False
+    #         second_penalty_loop = True
+    #         reset_optimizers = True
 
-            kl_target_stat = "max"
-            ent_coef = 0.0
-            kl_loss_coeff_lr = 5.0
-            kl_loss_coeff_momentum = 0.99999
-            historic_buffer_size = 48_000
-            second_loop_batch_size = 24_000
-            batch_size = 256
-            early_stop_epoch = True
-            cmd(
-                "python",
-                "src/klpo_stbl_MT10.py",
-                "--seed",
-                seed,
-                "--env",
-                env,
-                "--target-kl",
-                target_kl,
-                "--kl-target-stat",
-                kl_target_stat,
-                "--optimize-log-loss-coeff=no",
-                "--multi-step-trust-region=no",
-                "--second-penalty-loop",
-                "--reset-optimizers",
-                "--early-stop-epoch",
-                "--ent-coef",
-                ent_coef,
-                "--kl-loss-coeff-lr",
-                kl_loss_coeff_lr,
-                "--kl-loss-coeff-momentum",
-                kl_loss_coeff_momentum,
-                "--second-loop-batch-size",
-                second_loop_batch_size,
-                "--batch-size",
-                batch_size,
-                "--n-steps",
-                4096,
-                "--total-steps",
-                total_steps,
-                "--historic-buffer-size",
-                historic_buffer_size,
-                "--note",
-                note,
-                "--log-dir",
-                Out(
-                    f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_early-stop-epoch={early_stop_epoch}_note={note}/"
-                ),
-                warmup_time=3,
-                ram_gb=ram_gb,
-                priority=(-seed, 36),
-            )
-    for seed in seeds:
-        for env, total_steps in [
-            ("pick-place-v2", 20_000_000),
-            # ("window-open-v2", 7_000_000),
-            # ("button-press-topdown-v2", 7_000_000),
-            # ("reach-v2", 7_000_000),
-            # ("push-v2", 7_000_000),
-        ]:
-            target_kl = 0.02
-            note = "xppo_early_stop_across_epochs"
-            optimize_log_loss_coeff = False
-            second_penalty_loop = True
-            reset_optimizers = True
+    #         kl_target_stat = "max"
+    #         ent_coef = 0.0
+    #         kl_loss_coeff_lr = 5.0
+    #         kl_loss_coeff_momentum = 0.99999
+    #         historic_buffer_size = 48_000
+    #         second_loop_batch_size = 24_000
+    #         batch_size = 256
+    #         early_stop_epoch = True
+    #         cmd(
+    #             "python",
+    #             "src/klpo_stbl_MT10.py",
+    #             "--seed",
+    #             seed,
+    #             "--env",
+    #             env,
+    #             "--target-kl",
+    #             target_kl,
+    #             "--kl-target-stat",
+    #             kl_target_stat,
+    #             "--optimize-log-loss-coeff=no",
+    #             "--multi-step-trust-region=no",
+    #             "--second-penalty-loop",
+    #             "--reset-optimizers",
+    #             "--early-stop-epoch",
+    #             "--ent-coef",
+    #             ent_coef,
+    #             "--kl-loss-coeff-lr",
+    #             kl_loss_coeff_lr,
+    #             "--kl-loss-coeff-momentum",
+    #             kl_loss_coeff_momentum,
+    #             "--second-loop-batch-size",
+    #             second_loop_batch_size,
+    #             "--batch-size",
+    #             batch_size,
+    #             "--n-steps",
+    #             4096,
+    #             "--total-steps",
+    #             total_steps,
+    #             "--historic-buffer-size",
+    #             historic_buffer_size,
+    #             "--note",
+    #             note,
+    #             "--log-dir",
+    #             Out(
+    #                 f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_early-stop-epoch={early_stop_epoch}_note={note}/"
+    #             ),
+    #             warmup_time=3,
+    #             ram_gb=ram_gb,
+    #             priority=(-seed, 36),
+    #         )
+    # for seed in seeds:
+    #     for env, total_steps in [
+    #         ("pick-place-v2", 20_000_000),
+    #         # ("window-open-v2", 7_000_000),
+    #         # ("button-press-topdown-v2", 7_000_000),
+    #         # ("reach-v2", 7_000_000),
+    #         # ("push-v2", 7_000_000),
+    #     ]:
+    #         target_kl = 0.02
+    #         note = "xppo_early_stop_across_epochs"
+    #         optimize_log_loss_coeff = False
+    #         second_penalty_loop = True
+    #         reset_optimizers = True
 
-            kl_target_stat = "max"
-            ent_coef = 0.0
-            kl_loss_coeff_lr = 5.0
-            kl_loss_coeff_momentum = 0.99999
-            historic_buffer_size = 48_000
-            second_loop_batch_size = 24_000
-            batch_size = 256
-            early_stop_across_epochs = True
-            cmd(
-                "python",
-                "src/klpo_stbl_MT10.py",
-                "--seed",
-                seed,
-                "--env",
-                env,
-                "--target-kl",
-                target_kl,
-                "--kl-target-stat",
-                kl_target_stat,
-                "--optimize-log-loss-coeff=no",
-                "--multi-step-trust-region=no",
-                "--second-penalty-loop",
-                "--reset-optimizers",
-                "--early-stop-across-epochs",
-                "--ent-coef",
-                ent_coef,
-                "--kl-loss-coeff-lr",
-                kl_loss_coeff_lr,
-                "--kl-loss-coeff-momentum",
-                kl_loss_coeff_momentum,
-                "--second-loop-batch-size",
-                second_loop_batch_size,
-                "--batch-size",
-                batch_size,
-                "--n-steps",
-                4096,
-                "--total-steps",
-                total_steps,
-                "--historic-buffer-size",
-                historic_buffer_size,
-                "--note",
-                note,
-                "--log-dir",
-                Out(
-                    f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_early-stop-across-epochs={early_stop_across_epochs}_note={note}/"
-                ),
-                warmup_time=3,
-                ram_gb=ram_gb,
-                priority=(-seed, 36),
-            )
+    #         kl_target_stat = "max"
+    #         ent_coef = 0.0
+    #         kl_loss_coeff_lr = 5.0
+    #         kl_loss_coeff_momentum = 0.99999
+    #         historic_buffer_size = 48_000
+    #         second_loop_batch_size = 24_000
+    #         batch_size = 256
+    #         early_stop_across_epochs = True
+    #         cmd(
+    #             "python",
+    #             "src/klpo_stbl_MT10.py",
+    #             "--seed",
+    #             seed,
+    #             "--env",
+    #             env,
+    #             "--target-kl",
+    #             target_kl,
+    #             "--kl-target-stat",
+    #             kl_target_stat,
+    #             "--optimize-log-loss-coeff=no",
+    #             "--multi-step-trust-region=no",
+    #             "--second-penalty-loop",
+    #             "--reset-optimizers",
+    #             "--early-stop-across-epochs",
+    #             "--ent-coef",
+    #             ent_coef,
+    #             "--kl-loss-coeff-lr",
+    #             kl_loss_coeff_lr,
+    #             "--kl-loss-coeff-momentum",
+    #             kl_loss_coeff_momentum,
+    #             "--second-loop-batch-size",
+    #             second_loop_batch_size,
+    #             "--batch-size",
+    #             batch_size,
+    #             "--n-steps",
+    #             4096,
+    #             "--total-steps",
+    #             total_steps,
+    #             "--historic-buffer-size",
+    #             historic_buffer_size,
+    #             "--note",
+    #             note,
+    #             "--log-dir",
+    #             Out(
+    #                 f"MT_10_klpo_stbl/env={env}_seed={seed}_target-kl={target_kl}_kl-loss-coeff-lr={kl_loss_coeff_lr}_kl-loss-coeff-momentum={kl_loss_coeff_momentum}_early-stop-across-epochs={early_stop_across_epochs}_note={note}/"
+    #             ),
+    #             warmup_time=3,
+    #             ram_gb=ram_gb,
+    #             priority=(-seed, 36),
+    #         )
 
     # for seed in seeds[:4]:
     #     for env, total_steps in [

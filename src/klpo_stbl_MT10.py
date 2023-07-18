@@ -57,6 +57,7 @@ def klpo_stbl_MT10(
     max_path_length,
     early_stop_epoch: Optional[bool] = False,
     early_stop_across_epochs: Optional[bool] = False,
+    bang_bang_kl_loss_opt: Optional[bool] = False,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -89,6 +90,7 @@ def klpo_stbl_MT10(
         eval_policy=False,
         early_stop_epoch=early_stop_epoch,
         early_stop_across_epochs=early_stop_across_epochs,
+        bang_bang_kl_loss_opt = bang_bang_kl_loss_opt,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -130,6 +132,7 @@ if __name__ == "__main__":
         max_kl_loss_coeff: int = 2**20,
         early_stop_epoch: bool = False,
         early_stop_across_epochs: bool = False,
+        bang_bang_kl_loss_opt: bool = False,
     ):
         env, max_path_length = gen_env(env)
         klpo_stbl_MT10(
@@ -161,4 +164,5 @@ if __name__ == "__main__":
             max_path_length=max_path_length,
             early_stop_epoch=early_stop_epoch,
             early_stop_across_epochs=early_stop_across_epochs,
+            bang_bang_kl_loss_opt = bang_bang_kl_loss_opt,
         )

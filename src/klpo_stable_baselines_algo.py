@@ -34,7 +34,7 @@ from torch.nn import functional as F
 
 MIN_KL_LOSS_COEFF = 1e-2
 SECOND_PENALTY_LOOP_MAX = 100
-# MAX_KL_LOSS_COEFF = 1024
+MAX_KL_LOSS_COEFF = 100
 # MAX_LOG_KL_LOSS_COEFF = 10
 
 # MAX_KL_LOSS_COEFF = 2**20
@@ -130,6 +130,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         *,
         kl_loss_coeff_lr: float,
         kl_loss_coeff_momentum: float,
+        bang_bang_kl_loss_opt: bool = False,
         kl_target_stat: str,
         optimize_log_loss_coeff: bool = False,
         reset_optimizers: bool = True,
@@ -141,7 +142,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         second_loop_batch_size: int = 6400,
         second_loop_vf: bool = False,
         multi_step_trust_region: bool = True,
-        max_kl_loss_coeff: int = 2**20,
+        max_kl_loss_coeff: int = MAX_KL_LOSS_COEFF,
         eval_policy: bool = False,
         debug_output_directory: Optional[str] = None,
         early_stop_epoch: Optional[bool] = False,
@@ -246,6 +247,7 @@ class KLPOStbl(OnPolicyAlgorithm):
             )
         self._initial_kl_loss_coeff_state_dict = self._kl_loss_coeff_opt.state_dict()
         self._max_kl_loss_coeff = max_kl_loss_coeff
+        self._bang_bang_kl_loss_opt = bang_bang_kl_loss_opt
         self._eval_policy = eval_policy
         self._debug_output_directory = debug_output_directory
 
@@ -369,6 +371,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                     Independent(full_batch_old_dist, 1),
                 )
                 kl_div = full_batch_kl_div
+
             else:
                 # Don't accidentally use this code path
                 assert False, "Are you sure you meant to full batch kl div?"
@@ -444,16 +447,21 @@ class KLPOStbl(OnPolicyAlgorithm):
 
             # If optimizing the log loss coeff, then
             # self._kl_loss_coeff_param is the "log loss coeff"
-            if self._kl_target_stat == "mean":
-                loss += self._kl_loss_coeff_param * (
-                    self.target_kl - kl_div.mean().detach()
-                )
-            elif self._kl_target_stat == "max":
-                loss += self._kl_loss_coeff_param * (
-                    self.target_kl - kl_div.max().detach()
-                )
-            else:
-                raise ValueError("Invalid kl_target_stat")
+
+            if (
+                not self._bang_bang_kl_loss_opt and not use_pg_loss
+            ):  # Omitting L_beta from the loss
+                if self._kl_target_stat == "mean":
+                    loss += self._kl_loss_coeff_param * (
+                        self.target_kl - kl_div.mean().detach()
+                    )
+                elif self._kl_target_stat == "max":
+                    loss += self._kl_loss_coeff_param * (
+                        self.target_kl - kl_div.max().detach()
+                    )
+                else:
+                    raise ValueError("Invalid kl_target_stat")
+
             self._kl_loss_coeff_opt.zero_grad()
 
             # Optimization step
@@ -542,6 +550,12 @@ class KLPOStbl(OnPolicyAlgorithm):
             n_second_loop_minibatch = 0
             n_second_loop_backward = 0
             second_loop_skips = []
+
+            if (
+                self._bang_bang_kl_loss_opt
+            ):  # Will set the kl_loss_coeff_param to maximum value before second loop.
+                with th.no_grad():
+                    self._kl_loss_coeff_param.copy_(self._max_kl_loss_coeff)
             if self._sparse_second_loop:
                 while self._second_penalty_loop:
                     skipped_minibatches = 0
@@ -597,6 +611,13 @@ class KLPOStbl(OnPolicyAlgorithm):
                         self.policy.load_state_dict(self._old_policy.state_dict())
                         self.logger.record("train/broke_loop", 1)
                         break
+
+            if (
+                self._bang_bang_kl_loss_opt
+            ):  # Will set the kl_loss_coeff_param to init value after second loop.
+                with th.no_grad():
+                    self._kl_loss_coeff_param.copy_(1.0)
+
             second_penalty_loops.append(penalty_loops)
             first_loop_minibatches.append(n_first_loop_minibatch)
             second_loop_minibatches.append(n_second_loop_minibatch)
@@ -681,7 +702,8 @@ class KLPOStbl(OnPolicyAlgorithm):
             "train/second_loop_minibatches_total", np.sum(second_loop_minibatches)
         )
         self.logger.record(
-            "train/minibatches_total", np.sum(first_loop_minibatches) + np.sum(second_loop_minibatches)
+            "train/minibatches_total",
+            np.sum(first_loop_minibatches) + np.sum(second_loop_minibatches),
         )
 
         if second_penalty_loops:
