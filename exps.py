@@ -45,7 +45,7 @@ total_steps_for_env = {
 
 
 def xppo_mujoco(
-    seed, env, note, priority=None, cores=11, add_to_path: list = None, **kwargs
+    seed, env, note, priority=None, cores=3, add_to_path: list = None, **kwargs
 ):
     total_steps = total_steps_for_env.get(env, 20_000_000)
     if priority is None:
@@ -77,7 +77,7 @@ def xppo_mujoco(
 
 
 def xppo_mt10(
-    seed, env, note, priority=None, cores=7, add_to_path: list = None, **kwargs
+    seed, env, note, priority=None, cores=3, add_to_path: list = None, **kwargs
 ):
     if kwargs.get("total_steps"):
         total_steps = kwargs.pop("total_steps")
