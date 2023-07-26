@@ -45,7 +45,7 @@ total_steps_for_env = {
 
 
 def xppo_mujoco(
-    seed, env, note, priority=None, cores=7, add_to_path: list = None, **kwargs
+    seed, env, note, priority=None, cores=11, add_to_path: list = None, **kwargs
 ):
     total_steps = total_steps_for_env.get(env, 20_000_000)
     if priority is None:
@@ -704,38 +704,46 @@ elif HOST == "resl34":
 elif HOST == "stygian":
     GLOBAL_CONTEXT.max_concurrent_jobs = 4
     ram_gb = 4
-    for seed in seeds[:2]:
+    early_stop_epoch = False
+
+    for seed in seeds[:5]:
         for env, total_steps in [
             # ("pick-place-v2", 20_000_000),
             ("window-open-v2", 7_000_000),
-            # ("button-press-topdown-v2", 7_000_000),
-            # ("reach-v2", 7_000_000),
-            # ("push-v2", 7_000_000),
+            ("button-press-topdown-v2", 7_000_000),
+            ("reach-v2", 7_000_000),
+            ("push-v2", 7_000_000),
         ]:
-            for max_kl_loss_coeff in [5, 10, 20, 30, 50, 100]:
-                xppo_mt10(
-                    seed=seed,
-                    env=env,
-                    note="bang_bang_mt10",
-                    add_to_path=[
-                        "target_kl",
-                        "max_kl_loss_coeff",
-                        "early_stop_epoch",
-                        "kl_loss_coeff_lr",
-                    ],
-                    target_kl=0.02,
-                    max_kl_loss_coeff=max_kl_loss_coeff,
-                    kl_target_stat="max",
-                    ent_coef=0.0,
-                    kl_loss_coeff_lr=5.0,
-                    kl_loss_coeff_momentum=0.99999,
-                    historic_buffer_size=48_000,
-                    second_loop_batch_size=24_000,
-                    batch_size=256,
-                    total_steps=total_steps,
-                    bang_bang_kl_loss_opt=True,
-                    early_stop_epoch=True,
-                )
+            for maximum_kl_loss_coeff in [10, 50, 75, 100]:
+                for early_stop_epoch, bang_bang_reset_kl_loss_coeff in [
+                    (False, False),
+                ]:
+                    xppo_mt10(
+                        seed=seed,
+                        env=env,
+                        note="bang_bang_mt10_sweep",
+                        add_to_path=[
+                            "target_kl",
+                            "maximum_kl_loss_coeff",
+                            "early_stop_epoch",
+                            "kl_loss_coeff_lr",
+                            "bang_bang_reset_kl_loss_coeff",
+                        ],
+                        target_kl=0.02,
+                        maximum_kl_loss_coeff=maximum_kl_loss_coeff,
+                        kl_target_stat="max",
+                        ent_coef=0.0,
+                        kl_loss_coeff_lr=5.0,
+                        kl_loss_coeff_momentum=0.99999,
+                        historic_buffer_size=48_000,
+                        second_loop_batch_size=24_000,
+                        batch_size=256,
+                        total_steps=total_steps,
+                        bang_bang_kl_loss_opt=True,
+                        bang_bang_reset_kl_loss_coeff=bang_bang_reset_kl_loss_coeff,
+                        early_stop_epoch=early_stop_epoch,
+                    )
+
     # for seed in seeds:
     #     for env in [
     #         # "pick-place-v2",

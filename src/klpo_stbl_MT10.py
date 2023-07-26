@@ -53,11 +53,12 @@ def klpo_stbl_MT10(
     historic_buffer_size,
     second_loop_vf,
     multi_step_trust_region,
-    max_kl_loss_coeff,
+    maximum_kl_loss_coeff,
     max_path_length,
     early_stop_epoch: Optional[bool] = False,
     early_stop_across_epochs: Optional[bool] = False,
     bang_bang_kl_loss_opt: Optional[bool] = False,
+    bang_bang_reset_kl_loss_coeff: Optional[bool] = False,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -86,11 +87,12 @@ def klpo_stbl_MT10(
         historic_buffer_size=historic_buffer_size,
         second_loop_vf=second_loop_vf,
         multi_step_trust_region=multi_step_trust_region,
-        max_kl_loss_coeff=max_kl_loss_coeff,
+        maximum_kl_loss_coeff=maximum_kl_loss_coeff,
         eval_policy=False,
         early_stop_epoch=early_stop_epoch,
         early_stop_across_epochs=early_stop_across_epochs,
-        bang_bang_kl_loss_opt = bang_bang_kl_loss_opt,
+        bang_bang_kl_loss_opt=bang_bang_kl_loss_opt,
+        bang_bang_reset_kl_loss_coeff=bang_bang_reset_kl_loss_coeff,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -129,10 +131,11 @@ if __name__ == "__main__":
         historic_buffer_size: int = 32000,
         second_loop_vf: bool = False,
         multi_step_trust_region: bool = True,
-        max_kl_loss_coeff: int = 2**20,
+        maximum_kl_loss_coeff: int = 2**20,
         early_stop_epoch: bool = False,
         early_stop_across_epochs: bool = False,
         bang_bang_kl_loss_opt: bool = False,
+        bang_bang_reset_kl_loss_coeff: bool = False,
     ):
         env, max_path_length = gen_env(env)
         klpo_stbl_MT10(
@@ -160,9 +163,10 @@ if __name__ == "__main__":
             historic_buffer_size=historic_buffer_size,
             second_loop_vf=second_loop_vf,
             multi_step_trust_region=multi_step_trust_region,
-            max_kl_loss_coeff=max_kl_loss_coeff,
+            maximum_kl_loss_coeff=maximum_kl_loss_coeff,
             max_path_length=max_path_length,
             early_stop_epoch=early_stop_epoch,
             early_stop_across_epochs=early_stop_across_epochs,
-            bang_bang_kl_loss_opt = bang_bang_kl_loss_opt,
+            bang_bang_kl_loss_opt=bang_bang_kl_loss_opt,
+            bang_bang_reset_kl_loss_coeff=bang_bang_reset_kl_loss_coeff,
         )

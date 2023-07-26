@@ -130,7 +130,9 @@ class KLPOStbl(OnPolicyAlgorithm):
         *,
         kl_loss_coeff_lr: float,
         kl_loss_coeff_momentum: float,
+        maximum_kl_loss_coeff: float,
         bang_bang_kl_loss_opt: bool = False,
+        bang_bang_reset_kl_loss_coeff: bool = False,
         kl_target_stat: str,
         optimize_log_loss_coeff: bool = False,
         reset_optimizers: bool = True,
@@ -142,7 +144,6 @@ class KLPOStbl(OnPolicyAlgorithm):
         second_loop_batch_size: int = 6400,
         second_loop_vf: bool = False,
         multi_step_trust_region: bool = True,
-        max_kl_loss_coeff: int = MAX_KL_LOSS_COEFF,
         eval_policy: bool = False,
         debug_output_directory: Optional[str] = None,
         early_stop_epoch: Optional[bool] = False,
@@ -246,8 +247,9 @@ class KLPOStbl(OnPolicyAlgorithm):
                 momentum=self._kl_loss_coeff_momentum,
             )
         self._initial_kl_loss_coeff_state_dict = self._kl_loss_coeff_opt.state_dict()
-        self._max_kl_loss_coeff = max_kl_loss_coeff
+        self._max_kl_loss_coeff = maximum_kl_loss_coeff
         self._bang_bang_kl_loss_opt = bang_bang_kl_loss_opt
+        self._bang_bang_reset_kl_loss_coeff = bang_bang_reset_kl_loss_coeff
         self._eval_policy = eval_policy
         self._debug_output_directory = debug_output_directory
 
@@ -613,7 +615,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                         break
 
             if (
-                self._bang_bang_kl_loss_opt
+                self._bang_bang_kl_loss_opt and self._bang_bang_reset_kl_loss_coeff
             ):  # Will set the kl_loss_coeff_param to init value after second loop.
                 with th.no_grad():
                     self._kl_loss_coeff_param.copy_(1.0)
