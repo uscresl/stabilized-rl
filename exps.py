@@ -25,7 +25,9 @@ mujoco_envs = [
     "Hopper-v2",
     "Walker2d-v2",
 ]
-seeds = [1111, 2222, 3333, 4444, 5555, 6666, 7777, 8888]
+seeds = [1111, 2222, 3333, 4444, 5555, 6666, 7777, 8888,
+         # 1, 2, 3, 4, 5, 6, 7, 8
+         ]
 
 
 ppo_env_names_v3 = [
@@ -151,41 +153,45 @@ elif HOST == "resl34":
     note = "xppo_single_step_debug"
     env = "Walker2d-v2"
     seed = 6666
-    cmd(
-        "python",
-        "src/klpo_stbl_mujoco.py",
-        "--seed",
-        seed,
-        "--env",
-        env,
-        "--total-steps",
-        total_steps,
-        "--target-kl",
-        target_kl,
-        "--kl-loss-coeff-lr",
-        kl_loss_coeff_lr,
-        "--batch-size",
-        batch_size,
-        # "--use-beta-adam=no",
-        "--n-steps",
-        n_steps,
-        "--multi-step-trust-region=no",
-        "--note",
-        note,
-        "--log-dir",
-        Out(
-            f"klpo_stbl/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_note={note}/"
-        ),
-        "--debug-outdir",
-        "debug_data5",
-        warmup_time=3,
-        ram_gb=ram_gb,
-        priority=(
-            50,
-            -seed,
-        ),
-        cores=CORES,
-    )
+    for momentum in 0.0, 0.9, 0.9999:
+        cmd(
+            "python",
+            "src/klpo_stbl_mujoco.py",
+            "--seed",
+            seed,
+            "--env",
+            env,
+            "--total-steps",
+            total_steps,
+            "--target-kl",
+            target_kl,
+            "--kl-loss-coeff-lr",
+            kl_loss_coeff_lr,
+            "--batch-size",
+            batch_size,
+            # "--use-beta-adam=no",
+            "--n-steps",
+            n_steps,
+            "--multi-step-trust-region=no",
+            "--use-beta-adam=no",
+            "--kl-loss-coeff-momentum", momentum,
+            "--note",
+            note,
+            "--log-dir",
+            Out(
+                f"klpo_stbl_debug/env={env}_seed={seed}_n-steps={n_steps}_target-kl={target_kl}_kl_loss_coeff_momentum={momentum}_note={note}/"
+            ),
+            "--debug-pkls=yes",
+            "--debug-plots=yes",
+            warmup_time=3,
+            ram_gb=ram_gb,
+            priority=(
+                50,
+                -momentum,
+                -seed,
+            ),
+            cores=CORES,
+        )
     for seed in seeds:
         for env in [
             # "pick-place-v2",

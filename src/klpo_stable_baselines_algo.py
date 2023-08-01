@@ -145,7 +145,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         second_loop_vf: bool = False,
         multi_step_trust_region: bool = True,
         eval_policy: bool = False,
-        debug_output_directory: Optional[str] = None,
+        debug_plots: bool = False,
+        debug_pkls: bool = False,
         early_stop_epoch: Optional[bool] = False,
         early_stop_across_epochs: Optional[bool] = False,
     ):
@@ -251,7 +252,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._bang_bang_kl_loss_opt = bang_bang_kl_loss_opt
         self._bang_bang_reset_kl_loss_coeff = bang_bang_reset_kl_loss_coeff
         self._eval_policy = eval_policy
-        self._debug_output_directory = debug_output_directory
+        self._debug_plots = debug_plots
+        self._debug_pkls = debug_pkls
 
         self._early_stop_epoch = early_stop_epoch
         self._early_stop_across_epochs = early_stop_across_epochs
@@ -439,7 +441,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                     loss = loss_coeff_param.detach() * kl_div.mean()
 
             kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
-            if self._debug_output_directory is not None:
+            if self._debug_plots:
                 full_batch_kl_div = kl_divergence(
                     Independent(full_batch_new_dist, 1),
                     Independent(full_batch_old_dist, 1),
@@ -629,7 +631,7 @@ class KLPOStbl(OnPolicyAlgorithm):
             if not continue_training:
                 break
 
-        if self._debug_output_directory is not None:
+        if self._debug_plots:
             with th.no_grad():
                 full_batch_old_dist = self._old_policy.get_distribution(
                     historic_obs
@@ -645,13 +647,7 @@ class KLPOStbl(OnPolicyAlgorithm):
             full_kl_divs.append(full_batch_kl_div.mean().item())
             full_max_kl_divs.append(full_batch_kl_div.max().item())
 
-            with open(
-                f"{self._debug_output_directory}/step_{self._train_calls}.pkl", "wb"
-            ) as f:
-                import pickle
-
-                pickle.dump(
-                    {
+            debug_data = {
                         "kl_divs": kl_divs,
                         "full_kl_divs": full_kl_divs,
                         "full_max_kl_divs": full_max_kl_divs,
@@ -660,9 +656,23 @@ class KLPOStbl(OnPolicyAlgorithm):
                         "second_loop_backwards": second_loop_backwards,
                         "second_loop_all_skips": second_loop_all_skips,
                         "kl_loss_coeffs": kl_loss_coeffs,
-                    },
-                    f,
-                )
+                    }
+
+            gradient_steps_plot(debug_data,
+                                f"{self.logger.dir}/grad_steps_{self._train_calls}.svg")
+            kl_div_plot(debug_data,
+                        f"{self.logger.dir}/batch_mean_kl_divs_{self._train_calls:05}.svg")
+
+
+            if self._debug_pkls:
+                with open(
+                    f"{self.logger.dir}/step_{self._train_calls}.pkl", "wb"
+                ) as f:
+                    import pickle
+
+                    pickle.dump(debug_data ,
+                        f,
+                    )
 
         self._n_updates += self.n_epochs
         explained_var = explained_variance(
@@ -961,3 +971,67 @@ def sample_partial_buffer(buffer, batch_size: Optional[int] = None):
             *tuple([buffer.to_torch(d).squeeze(1) for d in data])
         )
         start_idx += batch_size
+
+MAX_GRAD_STEP = 0
+
+def gradient_steps_plot(debug_data, filename):
+    global MAX_GRAD_STEP
+    import matplotlib
+
+    matplotlib.rcParams.update(
+            {
+                        "figure.dpi": 150,
+                        "font.size": 14,
+                    }
+    )
+    matplotlib.rcParams["pdf.fonttype"] = 42
+    matplotlib.rcParams["ps.fonttype"] = 42
+
+    import matplotlib.pyplot as plt
+
+    plt.clf()
+    fig, ax1 = plt.subplots()
+    color = 'tab:red'
+    ax1.set_xlabel('Gradient Steps')
+    ax1.set_ylabel('Max KL Divergence', color=color)
+    ax1.plot(debug_data['full_max_kl_divs'], color=color)
+    # ax1.plot(debug_data['kl_divs'], color='orange')
+    ax1.tick_params(axis='y', labelcolor=color)
+    #ax1.set_aspect(2)
+    ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+    color = 'tab:blue'
+    ax2.set_ylabel(r'$\beta$', color=color)  # we already handled the x-label with ax1
+    ax2.plot(debug_data['kl_loss_coeffs'][1:], color=color)
+    ax2.tick_params(axis='y', labelcolor=color)
+
+    grad_step = 0
+    for epoch in range(len(debug_data['first_loop_minibatches'])):
+        grad_step += debug_data['first_loop_minibatches'][epoch]
+        ax1.axvspan(grad_step, grad_step + debug_data['second_loop_backwards'][epoch], alpha=0.25, color="green")
+        grad_step += debug_data['second_loop_backwards'][epoch]
+    MAX_GRAD_STEP = max(grad_step, MAX_GRAD_STEP)
+    ax1.hlines(0.2, xmin=0, xmax=MAX_GRAD_STEP, color="gray", linestyles="dashed")
+    #ax1.vlines(len(debug_data['full_max_kl_divs']) - debug_data['second_loop_minibatches'][0], ymin=0, ymax=0.2, color="green")
+    # ax1.set_aspect(1.5)
+    # ax2.set_aspect(1.5)
+    fig.tight_layout()  # otherwise the right y-label is slightly clipped
+    plt.savefig(filename)
+
+def kl_div_plot(debug_data, filename):
+    import matplotlib
+    matplotlib.rcParams.update(
+            {
+                        "figure.dpi": 150,
+                        "font.size": 14,
+                    }
+    )
+    matplotlib.rcParams["pdf.fonttype"] = 42
+    matplotlib.rcParams["ps.fonttype"] = 42
+
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    plt.clf()
+    sns.kdeplot(data=debug_data['kl_divs'])
+    plt.savefig(filename)
+
