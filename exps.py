@@ -714,7 +714,7 @@ elif HOST == "stygian":
 
     for seed in seeds[:5]:
         for env, total_steps in [
-            # ("pick-place-v2", 20_000_000),
+            # ("pick-place-v2", 10_000_000),
             ("window-open-v2", 7_000_000),
             ("button-press-topdown-v2", 7_000_000),
             ("reach-v2", 7_000_000),
@@ -726,8 +726,9 @@ elif HOST == "stygian":
                 ]:
                     xppo_mt10(
                         seed=seed,
+                        priority=(-seed, -maximum_kl_loss_coeff),
                         env=env,
-                        note="bang_bang_mt10_sweep",
+                        note="bang_bang_mt10_sweep_fixed",
                         add_to_path=[
                             "target_kl",
                             "maximum_kl_loss_coeff",

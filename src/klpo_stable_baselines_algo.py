@@ -589,6 +589,11 @@ class KLPOStbl(OnPolicyAlgorithm):
                     )
                     penalty_loops += 1
                     if skipped_minibatches == total_minibatches:
+                        if (
+                            self._bang_bang_kl_loss_opt and penalty_loops == 1
+                        ):  # Only reset when constraint is not broken during the whole batch.
+                            with th.no_grad():
+                                self._kl_loss_coeff_param.copy_(1.0)
                         break
                     if penalty_loops > SECOND_PENALTY_LOOP_MAX:
                         print("Too many loops")
