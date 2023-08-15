@@ -25,9 +25,17 @@ mujoco_envs = [
     "Hopper-v2",
     "Walker2d-v2",
 ]
-seeds = [1111, 2222, 3333, 4444, 5555, 6666, 7777, 8888,
-         # 1, 2, 3, 4, 5, 6, 7, 8
-         ]
+seeds = [
+    1111,
+    2222,
+    3333,
+    4444,
+    5555,
+    6666,
+    7777,
+    8888,
+    # 1, 2, 3, 4, 5, 6, 7, 8
+]
 
 
 ppo_env_names_v3 = [
@@ -174,7 +182,8 @@ elif HOST == "resl34":
             n_steps,
             "--multi-step-trust-region=no",
             "--use-beta-adam=no",
-            "--kl-loss-coeff-momentum", momentum,
+            "--kl-loss-coeff-momentum",
+            momentum,
             "--note",
             note,
             "--log-dir",
@@ -714,43 +723,68 @@ elif HOST == "stygian":
 
     for seed in seeds[:5]:
         for env, total_steps in [
-            # ("pick-place-v2", 10_000_000),
+            ("pick-place-v2", 10_000_000),
             ("window-open-v2", 7_000_000),
             ("button-press-topdown-v2", 7_000_000),
             ("reach-v2", 7_000_000),
             ("push-v2", 7_000_000),
         ]:
-            for maximum_kl_loss_coeff in [10, 50, 75, 100]:
-                for early_stop_epoch, bang_bang_reset_kl_loss_coeff in [
-                    (False, False),
-                ]:
-                    xppo_mt10(
-                        seed=seed,
-                        priority=(-seed, -maximum_kl_loss_coeff),
-                        env=env,
-                        note="bang_bang_mt10_sweep_fixed",
-                        add_to_path=[
-                            "target_kl",
-                            "maximum_kl_loss_coeff",
-                            "early_stop_epoch",
-                            "kl_loss_coeff_lr",
-                            "bang_bang_reset_kl_loss_coeff",
-                        ],
-                        target_kl=0.02,
-                        maximum_kl_loss_coeff=maximum_kl_loss_coeff,
-                        kl_target_stat="max",
-                        ent_coef=0.0,
-                        kl_loss_coeff_lr=5.0,
-                        kl_loss_coeff_momentum=0.99999,
-                        historic_buffer_size=48_000,
-                        second_loop_batch_size=24_000,
-                        batch_size=256,
-                        total_steps=total_steps,
-                        bang_bang_kl_loss_opt=True,
-                        bang_bang_reset_kl_loss_coeff=bang_bang_reset_kl_loss_coeff,
-                        early_stop_epoch=early_stop_epoch,
-                    )
-
+            # for maximum_kl_loss_coeff in [10, 50, 75, 100]:
+            #     for early_stop_epoch, bang_bang_reset_kl_loss_coeff in [
+            #         (False, False),
+            #     ]:
+            #         xppo_mt10(
+            #             seed=seed,
+            #             priority=(-seed, -maximum_kl_loss_coeff),
+            #             env=env,
+            #             note="bang_bang_mt10_sweep_fixed",
+            #             add_to_path=[
+            #                 "target_kl",
+            #                 "maximum_kl_loss_coeff",
+            #                 "early_stop_epoch",
+            #                 "kl_loss_coeff_lr",
+            #                 "bang_bang_reset_kl_loss_coeff",
+            #             ],
+            #             target_kl=0.02,
+            #             maximum_kl_loss_coeff=maximum_kl_loss_coeff,
+            #             kl_target_stat="max",
+            #             ent_coef=0.0,
+            #             kl_loss_coeff_lr=5.0,
+            #             kl_loss_coeff_momentum=0.99999,
+            #             historic_buffer_size=48_000,
+            #             second_loop_batch_size=24_000,
+            #             batch_size=256,
+            #             total_steps=total_steps,
+            #             bang_bang_kl_loss_opt=True,
+            #             bang_bang_reset_kl_loss_coeff=bang_bang_reset_kl_loss_coeff,
+            #             early_stop_epoch=early_stop_epoch,
+            #         )
+            xppo_mt10(
+                seed=seed,
+                priority=(-seed),
+                env=env,
+                note="v_trace",
+                add_to_path=[
+                    "target_kl",
+                    "maximum_kl_loss_coeff",
+                    "early_stop_epoch",
+                    "kl_loss_coeff_lr",
+                    "bang_bang_reset_kl_loss_coeff",
+                ],
+                target_kl=0.02,
+                kl_target_stat="max",
+                ent_coef=0.0,
+                kl_loss_coeff_lr=5.0,
+                kl_loss_coeff_momentum=0.99999,
+                historic_buffer_size=48_000,
+                second_loop_batch_size=24_000,
+                batch_size=256,
+                total_steps=total_steps,
+                bang_bang_kl_loss_opt=False,
+                v_trace=True,
+                bang_bang_reset_kl_loss_coeff=False,
+                early_stop_epoch=False,
+            )
     # for seed in seeds:
     #     for env in [
     #         # "pick-place-v2",

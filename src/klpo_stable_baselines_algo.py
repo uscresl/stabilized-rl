@@ -6,7 +6,8 @@ import gym
 import numpy as np
 import torch as th
 from gym import spaces
-from stable_baselines3.common.buffers import RolloutBuffer
+from v_trace_buffer import VTraceRolloutBuffer
+from stable_baselines3.common.buffers import DictRolloutBuffer, RolloutBuffer
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.policies import (
@@ -130,7 +131,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         *,
         kl_loss_coeff_lr: float,
         kl_loss_coeff_momentum: float,
-        maximum_kl_loss_coeff: float,
+        maximum_kl_loss_coeff: float = 75,
         bang_bang_kl_loss_opt: bool = False,
         bang_bang_reset_kl_loss_coeff: bool = False,
         kl_target_stat: str,
@@ -149,6 +150,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         debug_pkls: bool = False,
         early_stop_epoch: Optional[bool] = False,
         early_stop_across_epochs: Optional[bool] = False,
+        v_trace: bool = False,
     ):
 
         super().__init__(
@@ -205,6 +207,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self.clip_range_vf = clip_range_vf
         self.normalize_advantage = normalize_advantage
         self._historic_buffer_size = historic_buffer_size
+        self._v_trace = v_trace
 
         if _init_setup_model:
             self._setup_model()
@@ -259,7 +262,35 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._early_stop_across_epochs = early_stop_across_epochs
 
     def _setup_model(self) -> None:
-        super()._setup_model()
+        self._setup_lr_schedule()
+        self.set_random_seed(self.seed)
+
+        if self._v_trace:
+            buffer_cls = VTraceRolloutBuffer
+        else:
+            buffer_cls = (
+                DictRolloutBuffer
+                if isinstance(self.observation_space, spaces.Dict)
+                else RolloutBuffer
+            )
+
+        self.rollout_buffer = buffer_cls(
+            self.n_steps,
+            self.observation_space,
+            self.action_space,
+            device=self.device,
+            gamma=self.gamma,
+            gae_lambda=self.gae_lambda,
+            n_envs=self.n_envs,
+        )
+        self.policy = self.policy_class(  # pytype:disable=not-instantiable
+            self.observation_space,
+            self.action_space,
+            self.lr_schedule,
+            use_sde=self.use_sde,
+            **self.policy_kwargs,  # pytype:disable=not-instantiable
+        )
+        self.policy = self.policy.to(self.device)
 
         # Initialize schedules for policy/value clipping
         self.clip_range = get_schedule_fn(self.clip_range)
@@ -509,8 +540,20 @@ class KLPOStbl(OnPolicyAlgorithm):
         first_loop_minibatches = []
         # train for n_epochs epochs
         self._old_policy.load_state_dict(self.policy.state_dict())
+        complete_rollout_data = self.rollout_buffer.get()
         for epoch in range(self.n_epochs):
             # Do a complete pass on the rollout buffer
+            if self._v_trace:
+                with th.no_grad():
+                    values, log_prob, entropy = self.policy.evaluate_actions(
+                        self.rollout_buffer.to_torch(self.rollout_buffer.observations),
+                        self.rollout_buffer.to_torch(
+                            self.rollout_buffer.actions
+                        ).squeeze(),
+                    )
+                    self.rollout_buffer.compute_returns_and_advantage(
+                        learner_log_probs=log_prob
+                    )
             batch_adv_mean = self.rollout_buffer.advantages.mean()
             batch_adv_std = self.rollout_buffer.advantages.std()
             if self._multi_step_trust_region:
@@ -653,29 +696,30 @@ class KLPOStbl(OnPolicyAlgorithm):
             full_max_kl_divs.append(full_batch_kl_div.max().item())
 
             debug_data = {
-                        "kl_divs": kl_divs,
-                        "full_kl_divs": full_kl_divs,
-                        "full_max_kl_divs": full_max_kl_divs,
-                        "first_loop_minibatches": first_loop_minibatches,
-                        "second_loop_minibatches": second_loop_minibatches,
-                        "second_loop_backwards": second_loop_backwards,
-                        "second_loop_all_skips": second_loop_all_skips,
-                        "kl_loss_coeffs": kl_loss_coeffs,
-                    }
+                "kl_divs": kl_divs,
+                "full_kl_divs": full_kl_divs,
+                "full_max_kl_divs": full_max_kl_divs,
+                "first_loop_minibatches": first_loop_minibatches,
+                "second_loop_minibatches": second_loop_minibatches,
+                "second_loop_backwards": second_loop_backwards,
+                "second_loop_all_skips": second_loop_all_skips,
+                "kl_loss_coeffs": kl_loss_coeffs,
+            }
 
-            gradient_steps_plot(debug_data,
-                                f"{self.logger.dir}/grad_steps_{self._train_calls}.svg")
-            kl_div_plot(debug_data,
-                        f"{self.logger.dir}/batch_mean_kl_divs_{self._train_calls:05}.svg")
-
+            gradient_steps_plot(
+                debug_data, f"{self.logger.dir}/grad_steps_{self._train_calls}.svg"
+            )
+            kl_div_plot(
+                debug_data,
+                f"{self.logger.dir}/batch_mean_kl_divs_{self._train_calls:05}.svg",
+            )
 
             if self._debug_pkls:
-                with open(
-                    f"{self.logger.dir}/step_{self._train_calls}.pkl", "wb"
-                ) as f:
+                with open(f"{self.logger.dir}/step_{self._train_calls}.pkl", "wb") as f:
                     import pickle
 
-                    pickle.dump(debug_data ,
+                    pickle.dump(
+                        debug_data,
                         f,
                     )
 
@@ -977,17 +1021,19 @@ def sample_partial_buffer(buffer, batch_size: Optional[int] = None):
         )
         start_idx += batch_size
 
+
 MAX_GRAD_STEP = 0
+
 
 def gradient_steps_plot(debug_data, filename):
     global MAX_GRAD_STEP
     import matplotlib
 
     matplotlib.rcParams.update(
-            {
-                        "figure.dpi": 150,
-                        "font.size": 14,
-                    }
+        {
+            "figure.dpi": 150,
+            "font.size": 14,
+        }
     )
     matplotlib.rcParams["pdf.fonttype"] = 42
     matplotlib.rcParams["ps.fonttype"] = 42
@@ -996,47 +1042,54 @@ def gradient_steps_plot(debug_data, filename):
 
     plt.clf()
     fig, ax1 = plt.subplots()
-    color = 'tab:red'
-    ax1.set_xlabel('Gradient Steps')
-    ax1.set_ylabel('Max KL Divergence', color=color)
-    ax1.plot(debug_data['full_max_kl_divs'], color=color)
+    color = "tab:red"
+    ax1.set_xlabel("Gradient Steps")
+    ax1.set_ylabel("Max KL Divergence", color=color)
+    ax1.plot(debug_data["full_max_kl_divs"], color=color)
     # ax1.plot(debug_data['kl_divs'], color='orange')
-    ax1.tick_params(axis='y', labelcolor=color)
-    #ax1.set_aspect(2)
+    ax1.tick_params(axis="y", labelcolor=color)
+    # ax1.set_aspect(2)
     ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
 
-    color = 'tab:blue'
-    ax2.set_ylabel(r'$\beta$', color=color)  # we already handled the x-label with ax1
-    ax2.plot(debug_data['kl_loss_coeffs'][1:], color=color)
-    ax2.tick_params(axis='y', labelcolor=color)
+    color = "tab:blue"
+    ax2.set_ylabel(r"$\beta$", color=color)  # we already handled the x-label with ax1
+    ax2.plot(debug_data["kl_loss_coeffs"][1:], color=color)
+    ax2.tick_params(axis="y", labelcolor=color)
 
     grad_step = 0
-    for epoch in range(len(debug_data['first_loop_minibatches'])):
-        grad_step += debug_data['first_loop_minibatches'][epoch]
-        ax1.axvspan(grad_step, grad_step + debug_data['second_loop_backwards'][epoch], alpha=0.25, color="green")
-        grad_step += debug_data['second_loop_backwards'][epoch]
+    for epoch in range(len(debug_data["first_loop_minibatches"])):
+        grad_step += debug_data["first_loop_minibatches"][epoch]
+        ax1.axvspan(
+            grad_step,
+            grad_step + debug_data["second_loop_backwards"][epoch],
+            alpha=0.25,
+            color="green",
+        )
+        grad_step += debug_data["second_loop_backwards"][epoch]
     MAX_GRAD_STEP = max(grad_step, MAX_GRAD_STEP)
     ax1.hlines(0.2, xmin=0, xmax=MAX_GRAD_STEP, color="gray", linestyles="dashed")
-    #ax1.vlines(len(debug_data['full_max_kl_divs']) - debug_data['second_loop_minibatches'][0], ymin=0, ymax=0.2, color="green")
+    # ax1.vlines(len(debug_data['full_max_kl_divs']) - debug_data['second_loop_minibatches'][0], ymin=0, ymax=0.2, color="green")
     # ax1.set_aspect(1.5)
     # ax2.set_aspect(1.5)
     fig.tight_layout()  # otherwise the right y-label is slightly clipped
     plt.savefig(filename)
 
+
 def kl_div_plot(debug_data, filename):
     import matplotlib
+
     matplotlib.rcParams.update(
-            {
-                        "figure.dpi": 150,
-                        "font.size": 14,
-                    }
+        {
+            "figure.dpi": 150,
+            "font.size": 14,
+        }
     )
     matplotlib.rcParams["pdf.fonttype"] = 42
     matplotlib.rcParams["ps.fonttype"] = 42
 
     import matplotlib.pyplot as plt
     import seaborn as sns
-    plt.clf()
-    sns.kdeplot(data=debug_data['kl_divs'])
-    plt.savefig(filename)
 
+    plt.clf()
+    sns.kdeplot(data=debug_data["kl_divs"])
+    plt.savefig(filename)
