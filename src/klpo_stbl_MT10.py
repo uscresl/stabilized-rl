@@ -132,7 +132,7 @@ if __name__ == "__main__":
         second_loop_batch_size: int = 16000,
         historic_buffer_size: int = 32000,
         second_loop_vf: bool = False,
-        multi_step_trust_region: bool = True,
+        multi_step_trust_region: bool = False,
         maximum_kl_loss_coeff: int = 2**20,
         early_stop_epoch: bool = False,
         early_stop_across_epochs: bool = False,
