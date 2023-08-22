@@ -151,6 +151,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         early_stop_epoch: Optional[bool] = False,
         early_stop_across_epochs: Optional[bool] = False,
         v_trace: bool = False,
+        reset_beta: bool = True,
     ):
 
         super().__init__(
@@ -260,6 +261,7 @@ class KLPOStbl(OnPolicyAlgorithm):
 
         self._early_stop_epoch = early_stop_epoch
         self._early_stop_across_epochs = early_stop_across_epochs
+        self._reset_beta = reset_beta
 
     def _setup_model(self) -> None:
         self._setup_lr_schedule()
@@ -347,7 +349,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         )
         self.logger.record("buffer/rollout_buffer_len", self.rollout_buffer.pos)
 
-        if self._reset_optimizers:
+        if self._reset_optimizers and self._reset_beta:
             with th.no_grad():
                 self._kl_loss_coeff_param.copy_(1.0)
             self._kl_loss_coeff_opt.load_state_dict(
@@ -510,10 +512,9 @@ class KLPOStbl(OnPolicyAlgorithm):
             self.policy.optimizer.step()
             self._kl_loss_coeff_opt.step()
             if self._optimize_log_loss_coeff:
-                if self._kl_loss_coeff_param < 1 + MIN_KL_LOSS_COEFF:
+                if self._kl_loss_coeff_param < np.log2(MIN_KL_LOSS_COEFF):
                     with th.no_grad():
-                        self._kl_loss_coeff_param.copy_(1 + MIN_KL_LOSS_COEFF)
-                    assert self._kl_loss_coeff_param >= 1 + MIN_KL_LOSS_COEFF
+                        self._kl_loss_coeff_param.copy_(np.log2(MIN_KL_LOSS_COEFF))
                 elif self._kl_loss_coeff_param > np.log2(self._max_kl_loss_coeff):
                     with th.no_grad():
                         self._kl_loss_coeff_param.copy_(

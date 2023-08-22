@@ -43,6 +43,8 @@ def klpo_stbl(
     early_stop_across_epochs,
     n_epochs,
     vf_coef,
+    v_trace,
+    reset_beta,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -78,6 +80,8 @@ def klpo_stbl(
         early_stop_across_epochs=early_stop_across_epochs,
         n_epochs=n_epochs,
         vf_coef=vf_coef,
+        v_trace=v_trace,
+        reset_beta=reset_beta,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -114,12 +118,14 @@ if __name__ == "__main__":
         second_loop_vf: bool = False,
         multi_step_trust_region: bool = True,
         maximum_kl_loss_coeff: int = 2**20,
-        early_stop_epoch: bool = True,
+        early_stop_epoch: bool = False,
         early_stop_across_epochs: bool = False,
-        vf_coef=0.5,
+        vf_coef=0.1,
         n_epochs: int = 10,
         debug_plots: bool = False,
         debug_pkls: bool = False,
+        v_trace: bool = False,
+        reset_beta: bool = True,
     ):
         klpo_stbl(
             dict(log_dir=log_dir),
@@ -153,4 +159,6 @@ if __name__ == "__main__":
             vf_coef=vf_coef,
             debug_plots=debug_plots,
             debug_pkls=debug_pkls,
+            v_trace=v_trace,
+            reset_beta=reset_beta,
         )
