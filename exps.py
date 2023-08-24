@@ -12,12 +12,12 @@ from metaworld.envs.mujoco.env_dict import MT10_V2
 HOST = gethostname()
 
 if HOST == "brain.usc.edu":
-    # GLOBAL_CONTEXT.max_concurrent_jobs = 190
     # GLOBAL_CONTEXT.max_concurrent_jobs = 50
     GLOBAL_CONTEXT.max_concurrent_jobs = 100
-    # GLOBAL_CONTEXT.max_core_alloc = 432
+    # GLOBAL_CONTEXT.max_concurrent_jobs = 190
     # GLOBAL_CONTEXT.max_core_alloc = 150
     GLOBAL_CONTEXT.max_core_alloc = 300
+    # GLOBAL_CONTEXT.max_core_alloc = 432
 
 mujoco_envs = [
     # "InvertedDoublePendulum-v2",
@@ -34,7 +34,7 @@ seeds = [
     6666,
     7777,
     8888,
-    # 1, 2, 3, 4, 5, 6, 7, 8
+    1, 2, 3, 4, 5, 6, 7, 8
 ]
 
 
@@ -134,24 +134,28 @@ if HOST == "brain.usc.edu":
 
     for seed in seeds:
         for env in mujoco_envs:
-            for optimize_log_loss_coeff in [False, True]:
-                if optimize_log_loss_coeff:
-                    lr_values = [0.01, 0.1, 1.0]
-                else:
-                    lr_values = [1.0, 5.0, 10.0, 20.0]
-                for kl_loss_coeff_lr in lr_values:
-                    xppo_mujoco(
-                        seed=seed,
-                        env=env,
-                        note="beta_lr_sweep_no_reset",
-                        target_kl=0.2,
-                        reset_beta=False,
-                        use_beta_adam=False,
-                        kl_loss_coeff_lr=kl_loss_coeff_lr,
-                        kl_loss_coeff_momentum=0.0,
-                        optimize_log_loss_coeff=optimize_log_loss_coeff,
-                        maximum_kl_loss_coeff=256,
-                    )
+            for n_epochs in [10, 20, 30]:
+                for kl_loss_coeff_momentum in [0.0, 0.5, 0.99]:
+                    for maximum_kl_loss_coeff in [256, 128]:
+                        for optimize_log_loss_coeff in [False, True]:
+                            if optimize_log_loss_coeff:
+                                lr_values = [0.3, 0.5, 0.7, 1.0]
+                            else:
+                                lr_values = [10.0, 20.0, 50.0]
+                            for kl_loss_coeff_lr in lr_values:
+                                xppo_mujoco(
+                                    seed=seed,
+                                    env=env,
+                                    note="beta_lr_sweep_no_reset2",
+                                    target_kl=0.2,
+                                    reset_beta=False,
+                                    use_beta_adam=False,
+                                    kl_loss_coeff_lr=kl_loss_coeff_lr,
+                                    kl_loss_coeff_momentum=kl_loss_coeff_momentum,
+                                    optimize_log_loss_coeff=optimize_log_loss_coeff,
+                                    maximum_kl_loss_coeff=maximum_kl_loss_coeff,
+                                    n_epochs=n_epochs,
+                                )
 elif HOST == "resl34":
     # Full GPU utalization
     GLOBAL_CONTEXT.max_concurrent_jobs = 6
@@ -159,24 +163,26 @@ elif HOST == "resl34":
     for seed in seeds:
         seed = seed + 10000
         for env in mujoco_envs:
-            for optimize_log_loss_coeff in [False, True]:
-                if optimize_log_loss_coeff:
-                    lr_values = [0.01, 0.1, 1.0]
-                else:
-                    lr_values = [1.0, 5.0, 10.0, 20.0]
-                for kl_loss_coeff_lr in lr_values:
-                    xppo_mujoco(
-                        seed=seed,
-                        env=env,
-                        note="beta_lr_sweep_no_reset",
-                        target_kl=0.2,
-                        reset_beta=False,
-                        use_beta_adam=False,
-                        kl_loss_coeff_lr=kl_loss_coeff_lr,
-                        kl_loss_coeff_momentum=0.0,
-                        optimize_log_loss_coeff=optimize_log_loss_coeff,
-                        maximum_kl_loss_coeff=256,
-                    )
+            for n_epochs_args in [{}, {'n_epochs': 20}, {'n_epochs': 30}]:
+                for optimize_log_loss_coeff in [False, True]:
+                    if optimize_log_loss_coeff:
+                        lr_values = [0.01, 0.1, 0.3, 0.5, 0.7, 1.0]
+                    else:
+                        lr_values = [1.0, 5.0, 10.0, 20.0, 50.0]
+                    for kl_loss_coeff_lr in lr_values:
+                        xppo_mujoco(
+                            seed=seed,
+                            env=env,
+                            note="beta_lr_sweep_no_reset",
+                            target_kl=0.2,
+                            reset_beta=False,
+                            use_beta_adam=False,
+                            kl_loss_coeff_lr=kl_loss_coeff_lr,
+                            kl_loss_coeff_momentum=0.0,
+                            optimize_log_loss_coeff=optimize_log_loss_coeff,
+                            maximum_kl_loss_coeff=256,
+                            **n_epochs_args,
+                        )
 elif HOST == "stygian":
     GLOBAL_CONTEXT.max_concurrent_jobs = 4
     ram_gb = 4
