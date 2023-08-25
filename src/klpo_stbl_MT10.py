@@ -55,12 +55,13 @@ def klpo_stbl_MT10(
     multi_step_trust_region,
     maximum_kl_loss_coeff,
     max_path_length,
+    reset_beta: bool,
     early_stop_epoch: Optional[bool] = False,
     early_stop_across_epochs: Optional[bool] = False,
     bang_bang_kl_loss_opt: Optional[bool] = False,
     bang_bang_reset_kl_loss_coeff: Optional[bool] = False,
     v_trace: bool = False,
-    reset_beta: bool,
+    vf_coef: float = 0.5,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -97,6 +98,7 @@ def klpo_stbl_MT10(
         bang_bang_reset_kl_loss_coeff=bang_bang_reset_kl_loss_coeff,
         v_trace=v_trace,
         reset_beta=reset_beta,
+        vf_coef=vf_coef,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -118,7 +120,7 @@ if __name__ == "__main__":
         target_kl: float,
         note: str,
         ent_coef: float = 0.0,
-        kl_loss_coeff_lr: float = 3.0,
+        kl_loss_coeff_lr: float = 5.0,
         kl_loss_coeff_momentum: float = 0.9999,  # Not used with adam
         kl_target_stat: str = "max",
         n_steps: int = 4096,
@@ -131,8 +133,8 @@ if __name__ == "__main__":
         normalize_advantage: bool = False,
         second_penalty_loop: bool = True,
         total_steps: int = 3_000_000,
-        second_loop_batch_size: int = 16000,
-        historic_buffer_size: int = 32000,
+        second_loop_batch_size: int = 24000,
+        historic_buffer_size: int = 48000,
         second_loop_vf: bool = False,
         multi_step_trust_region: bool = False,
         maximum_kl_loss_coeff: int = 2**20,
@@ -142,6 +144,7 @@ if __name__ == "__main__":
         bang_bang_reset_kl_loss_coeff: bool = False,
         v_trace: bool = False,
         reset_beta: bool = True,
+        vf_coef=0.5,
     ):
         env, max_path_length = gen_env(env)
         klpo_stbl_MT10(
@@ -177,4 +180,5 @@ if __name__ == "__main__":
             bang_bang_reset_kl_loss_coeff=bang_bang_reset_kl_loss_coeff,
             v_trace=v_trace,
             reset_beta=reset_beta,
+            vf_coef=vf_coef,
         )
