@@ -58,13 +58,20 @@ class VTraceRolloutBuffer(BaseBuffer):
         )
         self.gae_lambda = gae_lambda
         self.gamma = gamma
-        self.observations, self.actions, self.rewards, self.advantages = (
+        (self.observations, self.actions, self.rewards, self.advantages) = (
             None,
             None,
             None,
             None,
         )
-        self.returns, self.episode_starts, self.values, self.log_probs = (
+        (
+            self.returns,
+            self.episode_starts,
+            self.values,
+            self.bootstrap_values,
+            self.log_probs,
+        ) = (
+            None,
             None,
             None,
             None,
@@ -91,6 +98,10 @@ class VTraceRolloutBuffer(BaseBuffer):
             (self.buffer_size, self.n_envs), dtype=np.float32
         )
         self.values = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.bootstrap_values = np.zeros(
+            (self.buffer_size, self.n_envs), dtype=np.float32
+        )
+
         self.log_probs = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.generator_ready = False
@@ -132,11 +143,13 @@ class VTraceRolloutBuffer(BaseBuffer):
         last_gae_lam = 0
         for step in reversed(range(self.buffer_size)):
             if step == self.buffer_size - 1:
-                next_non_terminal = 1.0 - self.dones
-                next_values = self.last_values
+                next_values = self.bootstrap_values[step]
             else:
                 next_non_terminal = 1.0 - self.episode_starts[step + 1]
-                next_values = self.values[step + 1]
+                if next_non_terminal:
+                    next_values = self.values[step + 1]
+                else:
+                    next_values = self.bootstrap_values[step]
 
             # self.returns[step] =
             temporal_diff = (
@@ -151,11 +164,15 @@ class VTraceRolloutBuffer(BaseBuffer):
                 likelihood_ratio = 1  # Assume learner and actor the same policy
             rho = np.clip(likelihood_ratio, a_min=-np.inf, a_max=self.rho_bar)
             c = np.clip(likelihood_ratio, a_min=-np.inf, a_max=self.c_bar)
-            if step == self.buffer_size - 1:
-                # returns_(step+1) = 0 ref:https://github.com/deepmind/scalable_agent/blob/6c0c8a701990fab9053fb338ede9c915c18fa2b1/vtrace.py#L269
+            if (step == self.buffer_size - 1) or not (next_non_terminal):
+                # returns_(step+1) = bootstrapped_value ref:https://github.com/deepmind/scalable_agent/blob/6c0c8a701990fab9053fb338ede9c915c18fa2b1/vtrace.py#L269
                 self.returns[step] = self.values[step] + rho * temporal_diff
 
-                self.advantages[step] = rho * (self.rewards[step] - self.values[step])
+                self.advantages[step] = rho * (
+                    self.rewards[step]
+                    + self.gamma * self.bootstrap_values[step]
+                    - self.values[step]
+                )
             else:
                 self.returns[step] = (
                     self.values[step]
@@ -177,6 +194,7 @@ class VTraceRolloutBuffer(BaseBuffer):
         episode_start: np.ndarray,
         value: th.Tensor,
         log_prob: th.Tensor,
+        bootstrap_value: th.Tensor = None,
     ) -> None:
         """
         :param obs: Observation
@@ -201,10 +219,16 @@ class VTraceRolloutBuffer(BaseBuffer):
         action = action.reshape((self.n_envs, self.action_dim))
 
         self.observations[self.pos] = np.array(obs).copy()
+        if bootstrap_value is not None:
+            self.bootstrap_values[self.pos] = (
+                bootstrap_value.clone().cpu().numpy().flatten()
+            )
+
         self.actions[self.pos] = np.array(action).copy()
         self.rewards[self.pos] = np.array(reward).copy()
         self.episode_starts[self.pos] = np.array(episode_start).copy()
         self.values[self.pos] = value.clone().cpu().numpy().flatten()
+
         self.log_probs[self.pos] = log_prob.clone().cpu().numpy()
         self.pos += 1
         if self.pos == self.buffer_size:
@@ -252,3 +276,75 @@ class VTraceRolloutBuffer(BaseBuffer):
             self.returns[batch_inds].flatten(),
         )
         return RolloutBufferSamples(*tuple(map(self.to_torch, data)))
+
+    def _on_out_of_space(self, space_needed: int):
+        """
+        Frees up space by evicting full episodes to
+        maintain a uniform mean reward across episodes.
+
+        Args:
+            space_needed (int): Time steps to add.
+        """
+
+        vars_to_update = [
+            "observations",
+            "actions",
+            "rewards",
+            "episode_starts",
+            "values",
+            "log_probs",
+            "bootstrap_values",
+        ]
+        remaining_space = self.buffer_size - self.pos
+
+        start_idxs = np.where(self.episode_starts.squeeze() == 1)[0]
+        avg_rewards = [
+            (start, end, np.average(self.rewards[start:end], axis=0))
+            for start, end in zip(start_idxs, start_idxs[1:])
+        ]
+        avg_rewards = sorted(avg_rewards, key=lambda x: x[2])
+        total_dists = []
+        end_episodes = []
+        for i, (start, end, reward) in enumerate(avg_rewards):
+            if i == 0 or i + 1 == len(
+                avg_rewards
+            ):  # Not taking into account the lowest or highest avg. reward episodes
+                end_episodes.append((start, end))
+                continue
+            dist_to_prev = reward - avg_rewards[i - 1][2]
+            dist_to_next = avg_rewards[i + 1][2] - reward
+            total_dists.append((start, end, abs(dist_to_prev) + abs(dist_to_next)))
+
+        total_dists = sorted(total_dists, key=lambda x: x[2])
+
+        for i, (start, end, total_dist) in enumerate(total_dists):
+            if remaining_space > space_needed:
+                save_episodes_from_idx = i
+                break
+            remaining_space += end - start
+        # Need to completely reset the buffer (NOTE: min & max avg. rewards not included in this)
+        if remaining_space < space_needed:
+            self.reset()
+            self.pos = 0
+            return
+        for var_name in vars_to_update:
+            var = getattr(self, var_name)
+            new_var = np.zeros_like(var)
+            selected_episodes = [
+                var[start:end]
+                for (start, end, _) in total_dists[save_episodes_from_idx:]
+            ]
+            selected_episodes.extend([var[start:end] for (start, end) in end_episodes])
+            selected_episodes = np.concatenate(selected_episodes, axis=0)
+
+            new_var[: len(selected_episodes)] = selected_episodes
+
+            setattr(self, var_name, new_var)
+            self.pos = len(selected_episodes)
+
+        # episode_starts = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        # episode_starts[0] = np.ones(self.n_envs)  # assuming only one env
+        # last_start = 0
+        # for i, (start, end, _) in enumerate(total_dists[save_episodes_from_idx:]):
+        #     last_start += end - start
+        #     episode_starts[last_start] = np.ones(self.n_envs)  # assuming only one env

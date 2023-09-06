@@ -163,7 +163,7 @@ elif HOST == "resl34":
     for seed in seeds:
         seed = seed + 10000
         for env in mujoco_envs:
-            for n_epochs_args in [{}, {'n_epochs': 20}, {'n_epochs': 30}]:
+            for n_epochs_args in [{}, {"n_epochs": 20}, {"n_epochs": 30}]:
                 for optimize_log_loss_coeff in [False, True]:
                     if optimize_log_loss_coeff:
                         lr_values = [0.01, 0.1, 0.3, 0.5, 0.7, 1.0]
@@ -196,39 +196,40 @@ elif HOST == "stygian":
             ("reach-v2", 7_000_000),
             ("push-v2", 7_000_000),
         ]:
-            for maximum_kl_loss_coeff in [10, 50, 75, 100]:
-                for early_stop_epoch, bang_bang_reset_kl_loss_coeff in [
-                    (False, False),
-                ]:
-                    xppo_mt10(
-                        seed=seed,
-                        priority=(-seed, -maximum_kl_loss_coeff),
-                        env=env,
-                        note="bang_bang_mt10_sweep_fixed_single_step",
-                        add_to_path=[
-                            "target_kl",
-                            "maximum_kl_loss_coeff",
-                            "early_stop_epoch",
-                            "kl_loss_coeff_lr",
-                            "bang_bang_reset_kl_loss_coeff",
-                            "multi_step_trust_region",
-                        ],
-                        target_kl=0.02,
-                        maximum_kl_loss_coeff=maximum_kl_loss_coeff,
-                        kl_target_stat="max",
-                        ent_coef=0.0,
-                        kl_loss_coeff_lr=5.0,
-                        kl_loss_coeff_momentum=0.99999,
-                        historic_buffer_size=48_000,
-                        second_loop_batch_size=24_000,
-                        batch_size=256,
-                        total_steps=total_steps,
-                        bang_bang_kl_loss_opt=True,
-                        bang_bang_reset_kl_loss_coeff=bang_bang_reset_kl_loss_coeff,
-                        early_stop_epoch=early_stop_epoch,
-                        multi_step_trust_region=False,
-                    )
+            # for maximum_kl_loss_coeff in [10, 50, 75, 100]:
+            #     for early_stop_epoch, bang_bang_reset_kl_loss_coeff in [
+            #         (False, False),
+            #     ]:
+            # xppo_mt10(
+            #     seed=seed,
+            #     priority=(-seed, -maximum_kl_loss_coeff),
+            #     env=env,
+            #     note="bang_bang_mt10_sweep_fixed_single_step",
+            #     add_to_path=[
+            #         "target_kl",
+            #         "maximum_kl_loss_coeff",
+            #         "early_stop_epoch",
+            #         "kl_loss_coeff_lr",
+            #         "bang_bang_reset_kl_loss_coeff",
+            #         "multi_step_trust_region",
+            #     ],
+            #     target_kl=0.02,
+            #     maximum_kl_loss_coeff=maximum_kl_loss_coeff,
+            #     kl_target_stat="max",
+            #     ent_coef=0.0,
+            #     kl_loss_coeff_lr=5.0,
+            #     kl_loss_coeff_momentum=0.99999,
+            #     historic_buffer_size=48_000,
+            #     second_loop_batch_size=24_000,
+            #     batch_size=256,
+            #     total_steps=total_steps,
+            #     bang_bang_kl_loss_opt=True,
+            #     bang_bang_reset_kl_loss_coeff=bang_bang_reset_kl_loss_coeff,
+            #     early_stop_epoch=early_stop_epoch,
+            #     multi_step_trust_region=False,
+            # )
             for vf_coef in [
+                0.0075,
                 0.01,
                 0.025,
                 0.05,
@@ -241,13 +242,14 @@ elif HOST == "stygian":
                     seed=seed,
                     priority=(-seed, vf_coef),
                     env=env,
-                    note="v_trace_single_step",
+                    note="v_trace_uniform_historical_buffer",
                     add_to_path=[
                         "target_kl",
                         "maximum_kl_loss_coeff",
                         "kl_loss_coeff_lr",
                         "vf_coef",
                         "multi_step_trust_region",
+                        "second_loop_vf",
                     ],
                     target_kl=0.02,
                     vf_coef=vf_coef,
@@ -264,6 +266,7 @@ elif HOST == "stygian":
                     bang_bang_reset_kl_loss_coeff=False,
                     early_stop_epoch=False,
                     multi_step_trust_region=False,
+                    second_loop_vf=True,
                     cores=2,
                 )
             # xppo_mt10(

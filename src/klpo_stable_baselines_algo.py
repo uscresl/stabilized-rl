@@ -296,7 +296,7 @@ class KLPOStbl(OnPolicyAlgorithm):
 
         # Initialize schedules for policy/value clipping
         self.clip_range = get_schedule_fn(self.clip_range)
-        self.historic_buffer = RolloutBuffer(
+        self.historic_buffer = buffer_cls(
             self._historic_buffer_size,
             self.observation_space,
             self.action_space,
@@ -459,7 +459,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                         )
                         values_pred = values
                         # Value loss using the TD(gae_lambda) target
-                        value_loss = F.mse_loss(r_data.returns, values_pred)
+                        value_loss = F.mse_loss(r_data.returns, values_pred.squeeze())
                         value_losses.append(value_loss.item())
                         loss += self.vf_coef * value_loss
                 if self._sparse_second_loop and self._kl_target_stat != "mean":
@@ -546,7 +546,7 @@ class KLPOStbl(OnPolicyAlgorithm):
             # Do a complete pass on the rollout buffer
             if self._v_trace:
                 with th.no_grad():
-                    values, log_prob, entropy = self.policy.evaluate_actions(
+                    _, log_prob, _ = self.policy.evaluate_actions(
                         self.rollout_buffer.to_torch(self.rollout_buffer.observations),
                         self.rollout_buffer.to_torch(
                             self.rollout_buffer.actions
@@ -554,6 +554,18 @@ class KLPOStbl(OnPolicyAlgorithm):
                     )
                     self.rollout_buffer.compute_returns_and_advantage(
                         learner_log_probs=log_prob
+                    )
+
+                    _, historic_log_prob, _ = self.policy.evaluate_actions(
+                        self.historic_buffer.to_torch(
+                            self.historic_buffer.observations
+                        ),
+                        self.historic_buffer.to_torch(
+                            self.historic_buffer.actions
+                        ).squeeze(),
+                    )
+                    self.historic_buffer.compute_returns_and_advantage(
+                        learner_log_probs=historic_log_prob
                     )
             batch_adv_mean = self.rollout_buffer.advantages.mean()
             batch_adv_std = self.rollout_buffer.advantages.std()
@@ -843,6 +855,17 @@ class KLPOStbl(OnPolicyAlgorithm):
         buffer_len = self.rollout_buffer.pos
         remaining_space = self.historic_buffer.buffer_size - self.historic_buffer.pos
 
+        if remaining_space <= buffer_len and isinstance(
+            self.historic_buffer, VTraceRolloutBuffer
+        ):
+            # Free up space to maintain full episodes & unifrom reward dist. over episodes
+            self.historic_buffer._on_out_of_space(
+                space_needed=buffer_len - remaining_space
+            )
+            remaining_space = (
+                self.historic_buffer.buffer_size - self.historic_buffer.pos
+            )
+
         if remaining_space <= buffer_len:
             for var in vars_to_copy:
                 self.historic_buffer.__getattribute__(var)[
@@ -959,15 +982,31 @@ class KLPOStbl(OnPolicyAlgorithm):
                     with th.no_grad():
                         terminal_value = self.policy.predict_values(terminal_obs)[0]
                     rewards[idx] += self.gamma * terminal_value
+            if isinstance(rollout_buffer, VTraceRolloutBuffer):
+                bootstrap_value = None
+                if episode_steps >= self.max_path_length or n_steps == n_rollout_steps:
+                    with th.no_grad():
+                        next_obs_tensor = obs_as_tensor(new_obs, self.device)
+                        _, bootstrap_value, _ = self.policy(next_obs_tensor)
 
-            rollout_buffer.add(
-                self._last_obs,
-                actions,
-                rewards,
-                self._last_episode_starts,
-                values,
-                log_probs,
-            )
+                rollout_buffer.add(
+                    self._last_obs,
+                    actions,
+                    rewards,
+                    self._last_episode_starts,
+                    values,
+                    log_probs,
+                    bootstrap_value=bootstrap_value,
+                )
+            else:
+                rollout_buffer.add(
+                    self._last_obs,
+                    actions,
+                    rewards,
+                    self._last_episode_starts,
+                    values,
+                    log_probs,
+                )
             if episode_steps >= self.max_path_length:
                 self._last_obs = self.env.reset()
                 self._last_episode_starts = True
