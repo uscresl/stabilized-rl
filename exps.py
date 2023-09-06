@@ -1,6 +1,7 @@
 from doexp import cmd, In, Out, GLOBAL_CONTEXT
 from socket import gethostname
 import random
+import json
 
 # import plot_all_csvs
 import sys
@@ -160,29 +161,46 @@ elif HOST == "resl34":
     # Full GPU utalization
     GLOBAL_CONTEXT.max_concurrent_jobs = 6
 
+
+    with open('trust-region-layers/configs/pg/mujoco_papi_config.json') as f:
+        papi_conf = json.load(f)
+
     for seed in seeds:
-        seed = seed + 10000
         for env in mujoco_envs:
-            for n_epochs_args in [{}, {"n_epochs": 20}, {"n_epochs": 30}]:
-                for optimize_log_loss_coeff in [False, True]:
-                    if optimize_log_loss_coeff:
-                        lr_values = [0.01, 0.1, 0.3, 0.5, 0.7, 1.0]
-                    else:
-                        lr_values = [1.0, 5.0, 10.0, 20.0, 50.0]
-                    for kl_loss_coeff_lr in lr_values:
-                        xppo_mujoco(
-                            seed=seed,
-                            env=env,
-                            note="beta_lr_sweep_no_reset",
-                            target_kl=0.2,
-                            reset_beta=False,
-                            use_beta_adam=False,
-                            kl_loss_coeff_lr=kl_loss_coeff_lr,
-                            kl_loss_coeff_momentum=0.0,
-                            optimize_log_loss_coeff=optimize_log_loss_coeff,
-                            maximum_kl_loss_coeff=256,
-                            **n_epochs_args,
-                        )
+            conf_name = f"data_tmp/trust-region-layers_papi_seed={seed}_env={env}.json"
+            out_dir = f"trust-region-layers_papi_seed={seed}_env={env}/"
+            papi_conf["n_envs"] = 1  # Should only affect sampling speed
+            papi_conf["seed"] = seed
+            papi_conf["env"] = env
+            papi_conf["out_dir"] = f"data_tmp/{out_dir}"
+            with open(conf_name, 'w') as f:
+                json.dump(papi_conf, f, indent=2)
+            cmd("python", "trust-region-layers/main.py", conf_name, extra_outputs=[Out(out_dir)],
+                cores=3, ram_gb=8)
+
+    # for seed in seeds:
+    #     seed = seed + 10000
+    #     for env in mujoco_envs:
+    #         for n_epochs_args in [{}, {"n_epochs": 20}, {"n_epochs": 30}]:
+    #             for optimize_log_loss_coeff in [False, True]:
+    #                 if optimize_log_loss_coeff:
+    #                     lr_values = [0.01, 0.1, 0.3, 0.5, 0.7, 1.0]
+    #                 else:
+    #                     lr_values = [1.0, 5.0, 10.0, 20.0, 50.0]
+    #                 for kl_loss_coeff_lr in lr_values:
+    #                     xppo_mujoco(
+    #                         seed=seed,
+    #                         env=env,
+    #                         note="beta_lr_sweep_no_reset",
+    #                         target_kl=0.2,
+    #                         reset_beta=False,
+    #                         use_beta_adam=False,
+    #                         kl_loss_coeff_lr=kl_loss_coeff_lr,
+    #                         kl_loss_coeff_momentum=0.0,
+    #                         optimize_log_loss_coeff=optimize_log_loss_coeff,
+    #                         maximum_kl_loss_coeff=256,
+    #                         **n_epochs_args,
+    #                     )
 elif HOST == "stygian":
     GLOBAL_CONTEXT.max_concurrent_jobs = 4
     ram_gb = 4
