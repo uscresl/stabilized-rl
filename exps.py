@@ -2,6 +2,7 @@ from doexp import cmd, In, Out, GLOBAL_CONTEXT
 from socket import gethostname
 import random
 import json
+from subprocess import run
 
 # import plot_all_csvs
 import sys
@@ -13,12 +14,29 @@ from metaworld.envs.mujoco.env_dict import MT10_V2
 HOST = gethostname()
 
 if HOST == "brain.usc.edu":
-    # GLOBAL_CONTEXT.max_concurrent_jobs = 50
-    GLOBAL_CONTEXT.max_concurrent_jobs = 100
+    MIN_CONCURRENT_JOBS = 15
+    #GLOBAL_CONTEXT.max_concurrent_jobs = 30
+    # GLOBAL_CONTEXT.max_concurrent_jobs = 100
     # GLOBAL_CONTEXT.max_concurrent_jobs = 190
     # GLOBAL_CONTEXT.max_core_alloc = 150
-    GLOBAL_CONTEXT.max_core_alloc = 300
-    # GLOBAL_CONTEXT.max_core_alloc = 432
+    # GLOBAL_CONTEXT.max_core_alloc = 300
+    GLOBAL_CONTEXT.max_core_alloc = 600
+    # GLOBAL_CONTEXT.max_concurrent_jobs = 15
+    squeue_res = run(['squeue', '--all'], check=False, capture_output=True)
+    if squeue_res.returncode == 0:
+        out = squeue_res.stdout.decode()
+        if "(Priority)" not in out and "(Resources)" not in out:
+            # Presumably free resources on the cluster
+            GLOBAL_CONTEXT.max_concurrent_jobs += 1
+            # print(f"Setting GLOBAL_CONTEXT.max_concurrent_jobs = {GLOBAL_CONTEXT.max_concurrent_jobs}")
+        else:
+            if GLOBAL_CONTEXT.max_concurrent_jobs != MIN_CONCURRENT_JOBS:
+                print(f"GLOBAL_CONTEXT.max_concurrent_jobs was {GLOBAL_CONTEXT.max_concurrent_jobs}")
+            # Someone is waiting (maybe us), don't start any more jobs
+            GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
+        #print(f"Setting GLOBAL_CONTEXT.max_concurrent_jobs = {GLOBAL_CONTEXT.max_concurrent_jobs}")
+
+
 
 mujoco_envs = [
     # "InvertedDoublePendulum-v2",
@@ -49,7 +67,7 @@ ppo_env_names_v3 = [
 ]
 
 total_steps_for_env = {
-    "HalfCheetah-v2": 3_000_000,
+    "HalfCheetah-v2": 10_000_000,
     "Hopper-v2": 10_000_000,
     "Walker2d-v2": 10_000_000,
 }
@@ -135,28 +153,73 @@ if HOST == "brain.usc.edu":
 
     for seed in seeds:
         for env in mujoco_envs:
-            for n_epochs in [10, 20, 30]:
-                for kl_loss_coeff_momentum in [0.0, 0.5, 0.99]:
-                    for maximum_kl_loss_coeff in [256, 128]:
-                        for optimize_log_loss_coeff in [False, True]:
-                            if optimize_log_loss_coeff:
-                                lr_values = [0.3, 0.5, 0.7, 1.0]
-                            else:
-                                lr_values = [10.0, 20.0, 50.0]
-                            for kl_loss_coeff_lr in lr_values:
-                                xppo_mujoco(
-                                    seed=seed,
-                                    env=env,
-                                    note="beta_lr_sweep_no_reset2",
-                                    target_kl=0.2,
-                                    reset_beta=False,
-                                    use_beta_adam=False,
-                                    kl_loss_coeff_lr=kl_loss_coeff_lr,
-                                    kl_loss_coeff_momentum=kl_loss_coeff_momentum,
-                                    optimize_log_loss_coeff=optimize_log_loss_coeff,
-                                    maximum_kl_loss_coeff=maximum_kl_loss_coeff,
-                                    n_epochs=n_epochs,
-                                )
+            for n_steps in [2048, 4096, 8192, 16384, 32768, 65536, 131072]:
+                historic_buffer_size = n_steps
+                for second_loop_batch_size in [n_steps, n_steps // 2, n_steps // 4, n_steps // 8, 1024]:
+                    xppo_mujoco(
+                        seed=seed,
+                        env=env,
+                        note="no_historic_buffer_sweep",
+                        target_kl=0.2,
+                        reset_optimizers=False,
+                        kl_loss_coeff_lr=0.1,
+                        n_steps=n_steps,
+                        historic_buffer_size=historic_buffer_size,
+                        second_loop_batch_size=second_loop_batch_size,
+                        priority=(-seed,
+                                  -second_loop_batch_size,
+                                  n_steps),
+                    )
+
+            # for optimize_log_loss_coeff in [False]:
+            #     if optimize_log_loss_coeff:
+            #         lr_values = [0.05, 0.1, 0.2]
+            #     else:
+            #         lr_values = [0.01, 0.05, 0.1, 0.15, 0.2]
+            #     for kl_loss_coeff_lr in lr_values:
+            #         xppo_mujoco(
+            #             seed=seed,
+            #             env=env,
+            #             note="beta_lr_sweep_no_reset_optimizers",
+            #             target_kl=0.2,
+            #             reset_optimizers=False,
+            #             optimize_log_loss_coeff=optimize_log_loss_coeff,
+            #             kl_loss_coeff_lr=kl_loss_coeff_lr,
+            #         )
+
+            # for n_epochs in [10]:
+            #     for kl_loss_coeff_momentum in [0.0, 0.5, 0.99, 'adam']:
+            #         for maximum_kl_loss_coeff in [1024]:
+            #             for optimize_log_loss_coeff in [False, True]:
+            #                 if optimize_log_loss_coeff:
+            #                     lr_values = [0.0005, 0.01, 0.05, 0.1]
+            #                 else:
+            #                     lr_values = [10.0, 20.0, 50.0]
+            #                 if kl_loss_coeff_momentum == 'adam':
+            #                     kl_loss_coeff_momentum = 0.0
+            #                     use_beta_adam = True
+            #                 else:
+            #                     use_beta_adam = False
+            #                 for kl_loss_coeff_lr in lr_values:
+            #                     xppo_mujoco(
+            #                         seed=seed,
+            #                         env=env,
+            #                         note="beta_lr_sweep_no_reset2",
+            #                         target_kl=0.2,
+            #                         reset_beta=False,
+            #                         use_beta_adam=use_beta_adam,
+            #                         kl_loss_coeff_lr=kl_loss_coeff_lr,
+            #                         kl_loss_coeff_momentum=kl_loss_coeff_momentum,
+            #                         optimize_log_loss_coeff=optimize_log_loss_coeff,
+            #                         maximum_kl_loss_coeff=maximum_kl_loss_coeff,
+            #                         n_epochs=n_epochs,
+            #                         priority=(maximum_kl_loss_coeff,
+            #                                   optimize_log_loss_coeff,
+            #                                   -seed,
+            #                                   -kl_loss_coeff_momentum,
+            #                                   -kl_loss_coeff_lr,
+            #                                   )
+            #                     )
 elif HOST == "resl34":
     # Full GPU utalization
     GLOBAL_CONTEXT.max_concurrent_jobs = 6

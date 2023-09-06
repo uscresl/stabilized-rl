@@ -132,6 +132,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         kl_loss_coeff_lr: float,
         kl_loss_coeff_momentum: float,
         maximum_kl_loss_coeff: float = 75,
+        min_kl_loss_coeff: float = 0.01,
         bang_bang_kl_loss_opt: bool = False,
         bang_bang_reset_kl_loss_coeff: bool = False,
         kl_target_stat: str,
@@ -262,6 +263,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._early_stop_epoch = early_stop_epoch
         self._early_stop_across_epochs = early_stop_across_epochs
         self._reset_beta = reset_beta
+        self._min_kl_loss_coeff = min_kl_loss_coeff
 
     def _setup_model(self) -> None:
         self._setup_lr_schedule()
@@ -512,19 +514,19 @@ class KLPOStbl(OnPolicyAlgorithm):
             self.policy.optimizer.step()
             self._kl_loss_coeff_opt.step()
             if self._optimize_log_loss_coeff:
-                if self._kl_loss_coeff_param < np.log2(MIN_KL_LOSS_COEFF):
+                if self._kl_loss_coeff_param < np.log2(self._min_kl_loss_coeff):
                     with th.no_grad():
-                        self._kl_loss_coeff_param.copy_(np.log2(MIN_KL_LOSS_COEFF))
+                        self._kl_loss_coeff_param.copy_(np.log2(self._min_kl_loss_coeff))
                 elif self._kl_loss_coeff_param > np.log2(self._max_kl_loss_coeff):
                     with th.no_grad():
                         self._kl_loss_coeff_param.copy_(
                             np.log2(self._max_kl_loss_coeff)
                         )
             else:
-                if self._kl_loss_coeff_param < MIN_KL_LOSS_COEFF:
+                if self._kl_loss_coeff_param < self._min_kl_loss_coeff:
                     with th.no_grad():
-                        self._kl_loss_coeff_param.copy_(MIN_KL_LOSS_COEFF)
-                    assert self._kl_loss_coeff_param >= MIN_KL_LOSS_COEFF
+                        self._kl_loss_coeff_param.copy_(self._min_kl_loss_coeff)
+                    assert self._kl_loss_coeff_param >= self._min_kl_loss_coeff
                 elif self._kl_loss_coeff_param > self._max_kl_loss_coeff:
                     with th.no_grad():
                         self._kl_loss_coeff_param.copy_(self._max_kl_loss_coeff)
