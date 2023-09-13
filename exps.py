@@ -143,6 +143,53 @@ def xppo_mt10(
 
 if HOST == "brain.usc.edu":
     for seed in seeds:
+        for env, total_steps in [
+            ("pick-place-v2", 10_000_000),
+            ("window-open-v2", 7_000_000),
+            ("button-press-topdown-v2", 7_000_000),
+            ("reach-v2", 7_000_000),
+            ("push-v2", 7_000_000),
+        ]:
+            for vf_coef in [
+                0.015,
+                0.02,
+                0.025,
+                0.03,
+
+            ]:
+                xppo_mt10(
+                    seed=seed,
+                    priority=(-seed, vf_coef),
+                    env=env,
+                    note="v_trace_uniform_historical_buffer",
+                    add_to_path=[
+                        "target_kl",
+                        "maximum_kl_loss_coeff",
+                        "kl_loss_coeff_lr",
+                        "vf_coef",
+                        "multi_step_trust_region",
+                        "second_loop_vf",
+                    ],
+                    target_kl=0.02,
+                    vf_coef=vf_coef,
+                    kl_target_stat="max",
+                    ent_coef=0.0,
+                    kl_loss_coeff_lr=5.0,
+                    kl_loss_coeff_momentum=0.99999,
+                    historic_buffer_size=48_000,
+                    second_loop_batch_size=24_000,
+                    batch_size=256,
+                    total_steps=total_steps,
+                    bang_bang_kl_loss_opt=False,
+                    v_trace=True,
+                    bang_bang_reset_kl_loss_coeff=False,
+                    early_stop_epoch=False,
+                    multi_step_trust_region=False,
+                    second_loop_vf=True,
+                    cores=2,
+                )
+
+    for seed in seeds:
         for env in [
             "pick-place-v2",
             "window-open-v2",
