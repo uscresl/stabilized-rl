@@ -105,7 +105,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         policy: Union[str, Type[ActorCriticPolicy]],
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 3e-4,
-        n_steps: int = 2048,
+        n_steps: int = 8192,
         batch_size: int = 64,
         n_epochs: int = 10,
         gamma: float = 0.99,
@@ -131,19 +131,19 @@ class KLPOStbl(OnPolicyAlgorithm):
         *,
         kl_loss_coeff_lr: float,
         kl_loss_coeff_momentum: float,
-        maximum_kl_loss_coeff: float = 75,
+        maximum_kl_loss_coeff: float = 2**20,
         min_kl_loss_coeff: float = 0.01,
         bang_bang_kl_loss_opt: bool = False,
         bang_bang_reset_kl_loss_coeff: bool = False,
         kl_target_stat: str,
         optimize_log_loss_coeff: bool = False,
-        reset_optimizers: bool = True,
-        historic_buffer_size: int = 32_000,
+        reset_optimizers: bool = False,
+        historic_buffer_size: int = 8192,
         second_penalty_loop: bool = True,
         minibatch_kl_penalty: bool = True,
         use_beta_adam: bool = True,
         sparse_second_loop: bool = True,
-        second_loop_batch_size: int = 6400,
+        second_loop_batch_size: int = 1024,
         second_loop_vf: bool = False,
         multi_step_trust_region: bool = True,
         eval_policy: bool = False,
@@ -152,7 +152,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         early_stop_epoch: Optional[bool] = False,
         early_stop_across_epochs: Optional[bool] = False,
         v_trace: bool = False,
-        reset_beta: bool = True,
+        reset_beta: bool = False,
     ):
 
         super().__init__(
@@ -227,7 +227,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._optimize_log_loss_coeff = optimize_log_loss_coeff
         self._kl_loss_coeff_lr = kl_loss_coeff_lr
         self._kl_loss_coeff_momentum = kl_loss_coeff_momentum
-        assert kl_target_stat in ["mean", "max"]
+        # assert kl_target_stat in ["mean", "max", "logmax"]
         self._kl_target_stat = kl_target_stat
         self._initial_policy_opt_state_dict = self.policy.optimizer.state_dict()
         self._reset_optimizers = reset_optimizers
@@ -490,6 +490,9 @@ class KLPOStbl(OnPolicyAlgorithm):
             if (
                 not self._bang_bang_kl_loss_opt and not use_pg_loss
             ):  # Omitting L_beta from the loss
+                target_kl = th.tensor(self.target_kl)
+                # Needed to move the inverse soft-plus zero
+                ln_2 = th.log(th.tensor(2))
                 if self._kl_target_stat == "mean":
                     loss += self._kl_loss_coeff_param * (
                         self.target_kl - kl_div.mean().detach()
@@ -497,6 +500,20 @@ class KLPOStbl(OnPolicyAlgorithm):
                 elif self._kl_target_stat == "max":
                     loss += self._kl_loss_coeff_param * (
                         self.target_kl - kl_div.max().detach()
+                    )
+                elif self._kl_target_stat == "logmax":
+                    loss += self._kl_loss_coeff_param * (
+                        th.log(target_kl) - kl_div.max().detach().log()
+                    )
+                elif self._kl_target_stat == "ispmax":
+                    # Inverse soft-plus with zero at target_kl
+                    loss += self._kl_loss_coeff_param * (
+                        th.log(th.expm1(ln_2 * kl_div.max()/target_kl))
+                    )
+                elif self._kl_target_stat == "cubeispmax":
+                    # Cube of inverse soft-plus with zero at target_kl
+                    loss += self._kl_loss_coeff_param * (
+                        th.log(th.expm1(ln_2 * kl_div.max()/target_kl)) ** 3
                     )
                 else:
                     raise ValueError("Invalid kl_target_stat")

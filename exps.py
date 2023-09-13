@@ -15,6 +15,7 @@ HOST = gethostname()
 
 if HOST == "brain.usc.edu":
     MIN_CONCURRENT_JOBS = 15
+    # MIN_CONCURRENT_JOBS = 100
     #GLOBAL_CONTEXT.max_concurrent_jobs = 30
     # GLOBAL_CONTEXT.max_concurrent_jobs = 100
     # GLOBAL_CONTEXT.max_concurrent_jobs = 190
@@ -200,23 +201,50 @@ if HOST == "brain.usc.edu":
 
     for seed in seeds:
         for env in mujoco_envs:
-            for n_steps in [2048, 4096, 8192, 16384, 32768, 65536, 131072]:
-                historic_buffer_size = n_steps
-                for second_loop_batch_size in [n_steps, n_steps // 2, n_steps // 4, n_steps // 8, 1024]:
-                    xppo_mujoco(
-                        seed=seed,
-                        env=env,
-                        note="no_historic_buffer_sweep",
-                        target_kl=0.2,
-                        reset_optimizers=False,
-                        kl_loss_coeff_lr=0.1,
-                        n_steps=n_steps,
-                        historic_buffer_size=historic_buffer_size,
-                        second_loop_batch_size=second_loop_batch_size,
-                        priority=(-seed,
-                                  -second_loop_batch_size,
-                                  n_steps),
-                    )
+            for target_kl in [0.01, 0.1, 0.2, 0.3, 0.5, 0.7]:
+                xppo_mujoco(
+                    seed=seed,
+                    env=env,
+                    note="kl_sweep",
+                    target_kl=target_kl,
+                    kl_loss_coeff_lr=0.01,
+                )
+            #for kl_target_stat in ["logmax", "cubeispmax"]:
+            # for kl_target_stat in ["logmax", "ispmax", "cubeispmax"]:
+            #     for kl_loss_coeff_lr in [0.001, 0.01, 0.1, 1.0]:
+            #         xppo_mujoco(
+            #             seed=seed,
+            #             env=env,
+            #             note="logmax_sweep_real",
+            #             target_kl=0.2,
+            #             kl_loss_coeff_lr=kl_loss_coeff_lr,
+            #             kl_target_stat=kl_target_stat,
+            #         )
+            # for kl_loss_coeff_lr in [0.001, 0.01, 0.1, 1.0]:
+            #     xppo_mujoco(
+            #         seed=seed,
+            #         env=env,
+            #         note="logmax_sweep",
+            #         target_kl=0.2,
+            #         kl_loss_coeff_lr=kl_loss_coeff_lr,
+            #     )
+            # for n_steps in [2048, 4096, 8192, 16384, 32768, 65536, 131072]:
+            #     historic_buffer_size = n_steps
+            #     for second_loop_batch_size in [n_steps, n_steps // 2, n_steps // 4, n_steps // 8, 1024]:
+            #         xppo_mujoco(
+            #             seed=seed,
+            #             env=env,
+            #             note="no_historic_buffer_sweep",
+            #             target_kl=0.2,
+            #             reset_optimizers=False,
+            #             kl_loss_coeff_lr=0.1,
+            #             n_steps=n_steps,
+            #             historic_buffer_size=historic_buffer_size,
+            #             second_loop_batch_size=second_loop_batch_size,
+            #             priority=(-seed,
+            #                       -second_loop_batch_size,
+            #                       n_steps),
+            #         )
 
             # for optimize_log_loss_coeff in [False]:
             #     if optimize_log_loss_coeff:
