@@ -318,7 +318,7 @@ class VTraceRolloutBuffer(BaseBuffer):
         total_dists = sorted(total_dists, key=lambda x: x[2])
 
         for i, (start, end, total_dist) in enumerate(total_dists):
-            if remaining_space > space_needed:
+            if remaining_space >= space_needed:
                 save_episodes_from_idx = i
                 break
             remaining_space += end - start

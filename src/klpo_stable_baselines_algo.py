@@ -874,7 +874,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         buffer_len = self.rollout_buffer.pos
         remaining_space = self.historic_buffer.buffer_size - self.historic_buffer.pos
 
-        if remaining_space <= buffer_len and isinstance(
+        if remaining_space < buffer_len and isinstance(
             self.historic_buffer, VTraceRolloutBuffer
         ):
             # Free up space to maintain full episodes & unifrom reward dist. over episodes
@@ -885,7 +885,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                 self.historic_buffer.buffer_size - self.historic_buffer.pos
             )
 
-        if remaining_space <= buffer_len:
+        if remaining_space < buffer_len:
             for var in vars_to_copy:
                 self.historic_buffer.__getattribute__(var)[
                     self.historic_buffer.pos : self.historic_buffer.pos
