@@ -145,7 +145,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         sparse_second_loop: bool = True,
         second_loop_batch_size: int = 1024,
         second_loop_vf: bool = False,
-        multi_step_trust_region: bool = True,
+        multi_step_trust_region: bool = False,
         eval_policy: bool = False,
         debug_plots: bool = False,
         debug_pkls: bool = False,

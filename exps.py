@@ -14,7 +14,7 @@ from metaworld.envs.mujoco.env_dict import MT10_V2
 HOST = gethostname()
 
 if HOST == "brain.usc.edu":
-    MIN_CONCURRENT_JOBS = 15
+    MIN_CONCURRENT_JOBS = 20
     # MIN_CONCURRENT_JOBS = 100
     #GLOBAL_CONTEXT.max_concurrent_jobs = 30
     # GLOBAL_CONTEXT.max_concurrent_jobs = 100
@@ -45,17 +45,7 @@ mujoco_envs = [
     "Hopper-v2",
     "Walker2d-v2",
 ]
-seeds = [
-    1111,
-    2222,
-    3333,
-    4444,
-    5555,
-    6666,
-    7777,
-    8888,
-    1, 2, 3, 4, 5, 6, 7, 8
-]
+seeds = list(range(16))
 
 
 ppo_env_names_v3 = [
@@ -201,14 +191,16 @@ if HOST == "brain.usc.edu":
 
     for seed in seeds:
         for env in mujoco_envs:
-            for target_kl in [0.01, 0.1, 0.2, 0.3, 0.5, 0.7]:
-                xppo_mujoco(
-                    seed=seed,
-                    env=env,
-                    note="kl_sweep",
-                    target_kl=target_kl,
-                    kl_loss_coeff_lr=0.01,
-                )
+            for kl_target_stat in ["mean", "max"]:
+                for target_kl in [0.01, 0.1, 0.15, 0.2, 0.25, 0.3]:
+                    xppo_mujoco(
+                        seed=seed,
+                        env=env,
+                        note="kl_sweep",
+                        target_kl=target_kl,
+                        kl_loss_coeff_lr=0.01,
+                        kl_target_stat=kl_target_stat,
+                    )
             #for kl_target_stat in ["logmax", "cubeispmax"]:
             # for kl_target_stat in ["logmax", "ispmax", "cubeispmax"]:
             #     for kl_loss_coeff_lr in [0.001, 0.01, 0.1, 1.0]:
