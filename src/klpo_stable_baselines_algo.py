@@ -155,6 +155,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         reset_beta: bool = False,
     ):
 
+        assert not multi_step_trust_region, "Are you sure you want to do this?"
         super().__init__(
             policy,
             env,
@@ -659,9 +660,12 @@ class KLPOStbl(OnPolicyAlgorithm):
                             second_loop_skips.append(False)
                             n_second_loop_backward += 1
                         n_second_loop_minibatch += 1
-                    second_penalty_skip_ratio.append(
-                        skipped_minibatches / total_minibatches
-                    )
+                    if total_minibatches == 0:
+                        second_penalty_skip_ratio.append(1)
+                    else:
+                        second_penalty_skip_ratio.append(
+                            skipped_minibatches / total_minibatches
+                        )
                     penalty_loops += 1
                     if skipped_minibatches == total_minibatches:
                         if (

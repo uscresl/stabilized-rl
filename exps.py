@@ -146,7 +146,6 @@ if HOST == "brain.usc.edu":
                 0.02,
                 0.025,
                 0.03,
-
             ]:
                 xppo_mt10(
                     seed=seed,
@@ -191,12 +190,16 @@ if HOST == "brain.usc.edu":
 
     for seed in seeds:
         for env in mujoco_envs:
-            for kl_target_stat in ["mean", "max"]:
-                for target_kl in [0.01, 0.1, 0.15, 0.2, 0.25, 0.3]:
+            for kl_target_stat in ["max", "mean"]:
+                if kl_target_stat == "max":
+                    target_kl_vals = [0.1, 0.2, 0.3, 0.5, 0.7]
+                else:
+                    target_kl_vals = [0.01, 0.1, 0.15, 0.2, 0.25]
+                for target_kl in target_kl_vals:
                     xppo_mujoco(
                         seed=seed,
                         env=env,
-                        note="kl_sweep",
+                        note="kl_sweep_fixed",
                         target_kl=target_kl,
                         kl_loss_coeff_lr=0.01,
                         kl_target_stat=kl_target_stat,
