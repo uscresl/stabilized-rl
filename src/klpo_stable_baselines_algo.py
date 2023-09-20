@@ -874,10 +874,11 @@ class KLPOStbl(OnPolicyAlgorithm):
             "values",
             "log_probs",
         ]
-
         buffer_len = self.rollout_buffer.pos
         remaining_space = self.historic_buffer.buffer_size - self.historic_buffer.pos
 
+        assert buffer_len != 0, "Empty batch being copied over to the historic buffer"
+        
         if remaining_space < buffer_len and isinstance(
             self.historic_buffer, VTraceRolloutBuffer
         ):
@@ -912,6 +913,8 @@ class KLPOStbl(OnPolicyAlgorithm):
             self.historic_buffer.pos = (
                 self.historic_buffer.pos + buffer_len
             ) % self.historic_buffer.buffer_size
+            if self.historic_buffer.pos == 0:
+                self.historic_buffer.full = True
 
     def collect_rollouts(
         self,
