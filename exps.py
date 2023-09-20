@@ -14,14 +14,14 @@ from metaworld.envs.mujoco.env_dict import MT10_V2
 HOST = gethostname()
 
 if HOST == "brain.usc.edu":
-    MIN_CONCURRENT_JOBS = 20
+    MIN_CONCURRENT_JOBS = 10
     # MIN_CONCURRENT_JOBS = 100
     #GLOBAL_CONTEXT.max_concurrent_jobs = 30
     # GLOBAL_CONTEXT.max_concurrent_jobs = 100
     # GLOBAL_CONTEXT.max_concurrent_jobs = 190
     # GLOBAL_CONTEXT.max_core_alloc = 150
     # GLOBAL_CONTEXT.max_core_alloc = 300
-    GLOBAL_CONTEXT.max_core_alloc = 600
+    GLOBAL_CONTEXT.max_core_alloc = 200
     # GLOBAL_CONTEXT.max_concurrent_jobs = 15
     squeue_res = run(['squeue', '--all'], check=False, capture_output=True)
     if squeue_res.returncode == 0:
@@ -41,11 +41,11 @@ if HOST == "brain.usc.edu":
 
 mujoco_envs = [
     # "InvertedDoublePendulum-v2",
-    "HalfCheetah-v2",
+    # "HalfCheetah-v2",
     "Hopper-v2",
     "Walker2d-v2",
 ]
-seeds = list(range(16))
+seeds = list(range(10))
 
 
 ppo_env_names_v3 = [
@@ -136,47 +136,39 @@ if HOST == "brain.usc.edu":
     for seed in seeds:
         for env, total_steps in [
             ("pick-place-v2", 10_000_000),
-            ("window-open-v2", 7_000_000),
-            ("button-press-topdown-v2", 7_000_000),
-            ("reach-v2", 7_000_000),
-            ("push-v2", 7_000_000),
+            # ("window-open-v2", 7_000_000),
+            # ("button-press-topdown-v2", 7_000_000),
+            # ("reach-v2", 7_000_000),
+            # ("push-v2", 7_000_000),
         ]:
-            for vf_coef in [
-                0.015,
-                0.02,
-                0.025,
-                0.03,
-            ]:
+            for n_steps in [5000, 10000, 50000, 100000]:
                 xppo_mt10(
                     seed=seed,
-                    priority=(-seed, vf_coef),
                     env=env,
-                    note="v_trace_uniform_historical_buffer",
-                    add_to_path=[
-                        "target_kl",
-                        "maximum_kl_loss_coeff",
-                        "kl_loss_coeff_lr",
-                        "vf_coef",
-                        "multi_step_trust_region",
-                        "second_loop_vf",
-                    ],
-                    target_kl=0.02,
-                    vf_coef=vf_coef,
+                    note="xppo_mt10_no_reset_n_steps_sweep",
+                    target_kl=0.2,
+                    vf_coef=0.1,
                     kl_target_stat="max",
-                    ent_coef=0.0,
-                    kl_loss_coeff_lr=5.0,
-                    kl_loss_coeff_momentum=0.99999,
-                    historic_buffer_size=48_000,
-                    second_loop_batch_size=24_000,
-                    batch_size=256,
+                    ent_coef=0.01,
+                    kl_loss_coeff_lr=0.01,
+                    n_steps=n_steps,
+                    historic_buffer_size=n_steps + 2,
+                    second_loop_batch_size=(n_steps + 2) // 2,
+                    batch_size=500,
                     total_steps=total_steps,
                     bang_bang_kl_loss_opt=False,
-                    v_trace=True,
+                    v_trace=False,
                     bang_bang_reset_kl_loss_coeff=False,
                     early_stop_epoch=False,
                     multi_step_trust_region=False,
-                    second_loop_vf=True,
-                    cores=2,
+                    second_loop_vf=False,
+                    reset_beta=False,
+                    add_to_path=[
+                        "target_kl",
+                        "n_steps",
+                        "ent_coef",
+                    ],
+                    priority = (51, total_steps, -seed)
                 )
 
     for seed in seeds:
@@ -190,16 +182,18 @@ if HOST == "brain.usc.edu":
 
     for seed in seeds:
         for env in mujoco_envs:
-            for kl_target_stat in ["max", "mean"]:
-                if kl_target_stat == "max":
-                    target_kl_vals = [0.1, 0.2, 0.3, 0.5, 0.7]
+            for kl_target_stat in ["max", "mean", "logmax"]:
+                if kl_target_stat == "mean":
+                    target_kl_vals = [0.01, 0.1, 0.15, 0.2, 0.25, 0.5]
+                elif kl_target_stat == "max":
+                    target_kl_vals = [0.01, 0.1, 0.2, 0.5]
                 else:
-                    target_kl_vals = [0.01, 0.1, 0.15, 0.2, 0.25]
+                    target_kl_vals = [0.01, 0.1, 0.2, 0.5]
                 for target_kl in target_kl_vals:
                     xppo_mujoco(
                         seed=seed,
                         env=env,
-                        note="kl_sweep_fixed",
+                        note="kl_sweep_fixed2",
                         target_kl=target_kl,
                         kl_loss_coeff_lr=0.01,
                         kl_target_stat=kl_target_stat,

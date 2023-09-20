@@ -660,12 +660,10 @@ class KLPOStbl(OnPolicyAlgorithm):
                             second_loop_skips.append(False)
                             n_second_loop_backward += 1
                         n_second_loop_minibatch += 1
-                    if total_minibatches == 0:
-                        second_penalty_skip_ratio.append(1)
-                    else:
-                        second_penalty_skip_ratio.append(
-                            skipped_minibatches / total_minibatches
-                        )
+                    assert total_minibatches != 0, "Should have at least one second-loop minibatch"
+                    second_penalty_skip_ratio.append(
+                        skipped_minibatches / total_minibatches
+                    )
                     penalty_loops += 1
                     if skipped_minibatches == total_minibatches:
                         if (

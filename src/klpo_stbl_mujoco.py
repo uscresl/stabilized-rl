@@ -114,7 +114,7 @@ if __name__ == "__main__":
         second_penalty_loop: bool = True,
         total_steps: int=3_000_000,
         second_loop_batch_size: int=1024,
-        historic_buffer_size: int = 8192,
+        historic_buffer_size: int = 8193,
         second_loop_vf: bool = False,
         multi_step_trust_region: bool = False,
         maximum_kl_loss_coeff: int = 2**20,
