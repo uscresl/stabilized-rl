@@ -21,7 +21,8 @@ if HOST == "brain.usc.edu":
     # GLOBAL_CONTEXT.max_concurrent_jobs = 190
     # GLOBAL_CONTEXT.max_core_alloc = 150
     # GLOBAL_CONTEXT.max_core_alloc = 300
-    GLOBAL_CONTEXT.max_core_alloc = 200
+    # GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
+    GLOBAL_CONTEXT.max_core_alloc = 600
     # GLOBAL_CONTEXT.max_concurrent_jobs = 15
     squeue_res = run(['squeue', '--all'], check=False, capture_output=True)
     if squeue_res.returncode == 0:
@@ -38,12 +39,67 @@ if HOST == "brain.usc.edu":
         #print(f"Setting GLOBAL_CONTEXT.max_concurrent_jobs = {GLOBAL_CONTEXT.max_concurrent_jobs}")
 
 
+MT50_ENV_NAMES = [
+    "assembly",
+    "basketball",
+    "bin-picking",
+    "box-close",
+    "button-press-topdown",
+    "button-press-topdown-wall",
+    "button-press",
+    "button-press-wall",
+    "coffee-button",
+    "coffee-pull",
+    "coffee-push",
+    "dial-turn",
+    "disassemble",
+    "door-close",
+    "door-lock",
+    "door-open",
+    "door-unlock",
+    "hand-insert",
+    "drawer-close",
+    "drawer-open",
+    "faucet-open",
+    "faucet-close",
+    "hammer",
+    "handle-press-side",
+    "handle-press",
+    "handle-pull-side",
+    "handle-pull",
+    "lever-pull",
+    "peg-insert-side",
+    "pick-place-wall",
+    "pick-out-of-hole",
+    "reach",
+    "push-back",
+    "push",
+    "pick-place",
+    "plate-slide",
+    "plate-slide-side",
+    "plate-slide-back",
+    "plate-slide-back-side",
+    "peg-unplug-side",
+    "soccer",
+    "stick-push",
+    "stick-pull",
+    "push-wall",
+    "reach-wall",
+    "shelf-place",
+    "sweep-into",
+    "sweep",
+    "window-open",
+    "window-close",
+]
 
 mujoco_envs = [
-    # "InvertedDoublePendulum-v2",
     # "HalfCheetah-v2",
-    "Hopper-v2",
     "Walker2d-v2",
+    "Hopper-v2",
+    # "Swimmer-v2",
+    # "InvertedDoublePendulum-v2",
+    # "InvertedPendulum-v2",
+    "Reacher-v2",
 ]
 seeds = list(range(10))
 
@@ -67,7 +123,7 @@ total_steps_for_env = {
 def xppo_mujoco(
     seed, env, note, priority=None, cores=3, add_to_path: list = None, **kwargs
 ):
-    total_steps = total_steps_for_env.get(env, 20_000_000)
+    total_steps = total_steps_for_env.get(env, 10_000_000)
     if priority is None:
         priority = (50, total_steps, -seed)
     if add_to_path is None:
@@ -134,26 +190,21 @@ def xppo_mt10(
 
 if HOST == "brain.usc.edu":
     for seed in seeds:
-        for env, total_steps in [
-            ("pick-place-v2", 10_000_000),
-            # ("window-open-v2", 7_000_000),
-            # ("button-press-topdown-v2", 7_000_000),
-            # ("reach-v2", 7_000_000),
-            # ("push-v2", 7_000_000),
-        ]:
-            for n_steps in [5000, 10000, 50000, 100000]:
+        for env in MT50_ENV_NAMES:
+            total_steps = 20_000_000
+            for n_steps in [50000]:
                 xppo_mt10(
                     seed=seed,
-                    env=env,
-                    note="xppo_mt10_no_reset_n_steps_sweep",
+                    env=f"{env}-v2",
+                    note="xppo_mt10_no_reset_50k",
                     target_kl=0.2,
                     vf_coef=0.1,
                     kl_target_stat="max",
                     ent_coef=0.01,
                     kl_loss_coeff_lr=0.01,
                     n_steps=n_steps,
-                    historic_buffer_size=n_steps + 2,
-                    second_loop_batch_size=(n_steps + 2) // 2,
+                    historic_buffer_size=n_steps,
+                    second_loop_batch_size=n_steps // 2,
                     batch_size=500,
                     total_steps=total_steps,
                     bang_bang_kl_loss_opt=False,
@@ -168,7 +219,7 @@ if HOST == "brain.usc.edu":
                         "n_steps",
                         "ent_coef",
                     ],
-                    priority = (51, total_steps, -seed)
+                    priority = (50,  -seed)
                 )
 
     for seed in seeds:
@@ -182,22 +233,43 @@ if HOST == "brain.usc.edu":
 
     for seed in seeds:
         for env in mujoco_envs:
-            for kl_target_stat in ["max", "mean", "logmax"]:
-                if kl_target_stat == "mean":
-                    target_kl_vals = [0.01, 0.1, 0.15, 0.2, 0.25, 0.5]
-                elif kl_target_stat == "max":
-                    target_kl_vals = [0.01, 0.1, 0.2, 0.5]
-                else:
-                    target_kl_vals = [0.01, 0.1, 0.2, 0.5]
-                for target_kl in target_kl_vals:
-                    xppo_mujoco(
-                        seed=seed,
-                        env=env,
-                        note="kl_sweep_fixed2",
-                        target_kl=target_kl,
-                        kl_loss_coeff_lr=0.01,
-                        kl_target_stat=kl_target_stat,
-                    )
+            n_steps = 50000
+            xppo_mujoco(
+                seed=seed,
+                env=env,
+                note="xppo_mujoco_metaworld_hparams",
+                target_kl=0.2,
+                vf_coef=0.1,
+                kl_target_stat="max",
+                ent_coef=0.01,
+                kl_loss_coeff_lr=0.01,
+                n_steps = n_steps,
+                historic_buffer_size=n_steps,
+                second_loop_batch_size=n_steps // 2,
+                batch_size=500,
+                add_to_path=[
+                    "target_kl",
+                    "n_steps",
+                    "ent_coef",
+                ],
+                priority = (50, -seed)
+            )
+            # for kl_target_stat in ["max", "mean", "logmax"]:
+            #     if kl_target_stat == "mean":
+            #         target_kl_vals = [0.01, 0.1, 0.15, 0.2, 0.25, 0.5]
+            #     elif kl_target_stat == "max":
+            #         target_kl_vals = [0.01, 0.1, 0.2, 0.5]
+            #     else:
+            #         target_kl_vals = [0.01, 0.1, 0.2, 0.5]
+            #     for target_kl in target_kl_vals:
+            #         xppo_mujoco(
+            #             seed=seed,
+            #             env=env,
+            #             note="kl_sweep_fixed2",
+            #             target_kl=target_kl,
+            #             kl_loss_coeff_lr=0.01,
+            #             kl_target_stat=kl_target_stat,
+            #         )
             #for kl_target_stat in ["logmax", "cubeispmax"]:
             # for kl_target_stat in ["logmax", "ispmax", "cubeispmax"]:
             #     for kl_loss_coeff_lr in [0.001, 0.01, 0.1, 1.0]:

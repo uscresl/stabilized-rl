@@ -10,12 +10,13 @@ from klpo_stable_baselines_algo import KLPOStbl
 from stable_baselines3.common.logger import configure
 import random
 from metaworld.envs.mujoco.sawyer_xyz.v2 import SawyerReachEnvV2
-from metaworld.envs.mujoco.env_dict import MT10_V2
+#from metaworld.envs.mujoco.env_dict import MT10_V2
+from metaworld.envs.mujoco.env_dict import MT50_V2
 import os
 
 
 def gen_env(env: str):
-    env_cls = MT10_V2[env]
+    env_cls = MT50_V2[env]
     expert_env = env_cls()
     expert_env._partially_observable = False
     expert_env._set_task_called = True
