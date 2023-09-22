@@ -192,7 +192,7 @@ if HOST == "brain.usc.edu":
     for seed in seeds:
         for env in MT50_ENV_NAMES:
             total_steps = 20_000_000
-            for n_steps in [50000]:
+            for n_steps in [10_000, 50_000]:
                 xppo_mt10(
                     seed=seed,
                     env=f"{env}-v2",
@@ -233,27 +233,27 @@ if HOST == "brain.usc.edu":
 
     for seed in seeds:
         for env in mujoco_envs:
-            n_steps = 50000
-            xppo_mujoco(
-                seed=seed,
-                env=env,
-                note="xppo_mujoco_metaworld_hparams",
-                target_kl=0.2,
-                vf_coef=0.1,
-                kl_target_stat="max",
-                ent_coef=0.01,
-                kl_loss_coeff_lr=0.01,
-                n_steps = n_steps,
-                historic_buffer_size=n_steps,
-                second_loop_batch_size=n_steps // 2,
-                batch_size=500,
-                add_to_path=[
-                    "target_kl",
-                    "n_steps",
-                    "ent_coef",
-                ],
-                priority = (50, -seed)
-            )
+            for n_steps in [10_000, 50_000]:
+                xppo_mujoco(
+                    seed=seed,
+                    env=env,
+                    note="xppo_mujoco_metaworld_hparams",
+                    target_kl=0.2,
+                    vf_coef=0.1,
+                    kl_target_stat="max",
+                    ent_coef=0.01,
+                    kl_loss_coeff_lr=0.01,
+                    n_steps = n_steps,
+                    historic_buffer_size=n_steps,
+                    second_loop_batch_size=n_steps // 2,
+                    batch_size=500,
+                    add_to_path=[
+                        "target_kl",
+                        "n_steps",
+                        "ent_coef",
+                    ],
+                    priority = (50, -seed)
+                )
             # for kl_target_stat in ["max", "mean", "logmax"]:
             #     if kl_target_stat == "mean":
             #         target_kl_vals = [0.01, 0.1, 0.15, 0.2, 0.25, 0.5]
