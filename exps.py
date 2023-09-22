@@ -16,7 +16,7 @@ HOST = gethostname()
 if HOST == "brain.usc.edu":
     MIN_CONCURRENT_JOBS = 10
     # MIN_CONCURRENT_JOBS = 100
-    #GLOBAL_CONTEXT.max_concurrent_jobs = 30
+    # GLOBAL_CONTEXT.max_concurrent_jobs = 30
     # GLOBAL_CONTEXT.max_concurrent_jobs = 100
     # GLOBAL_CONTEXT.max_concurrent_jobs = 190
     # GLOBAL_CONTEXT.max_core_alloc = 150
@@ -24,7 +24,7 @@ if HOST == "brain.usc.edu":
     # GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
     GLOBAL_CONTEXT.max_core_alloc = 600
     # GLOBAL_CONTEXT.max_concurrent_jobs = 15
-    squeue_res = run(['squeue', '--all'], check=False, capture_output=True)
+    squeue_res = run(["squeue", "--all"], check=False, capture_output=True)
     if squeue_res.returncode == 0:
         out = squeue_res.stdout.decode()
         if "(Priority)" not in out and "(Resources)" not in out:
@@ -33,10 +33,12 @@ if HOST == "brain.usc.edu":
             # print(f"Setting GLOBAL_CONTEXT.max_concurrent_jobs = {GLOBAL_CONTEXT.max_concurrent_jobs}")
         else:
             if GLOBAL_CONTEXT.max_concurrent_jobs != MIN_CONCURRENT_JOBS:
-                print(f"GLOBAL_CONTEXT.max_concurrent_jobs was {GLOBAL_CONTEXT.max_concurrent_jobs}")
+                print(
+                    f"GLOBAL_CONTEXT.max_concurrent_jobs was {GLOBAL_CONTEXT.max_concurrent_jobs}"
+                )
             # Someone is waiting (maybe us), don't start any more jobs
             GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
-        #print(f"Setting GLOBAL_CONTEXT.max_concurrent_jobs = {GLOBAL_CONTEXT.max_concurrent_jobs}")
+        # print(f"Setting GLOBAL_CONTEXT.max_concurrent_jobs = {GLOBAL_CONTEXT.max_concurrent_jobs}")
 
 
 MT50_ENV_NAMES = [
@@ -219,7 +221,7 @@ if HOST == "brain.usc.edu":
                         "n_steps",
                         "ent_coef",
                     ],
-                    priority = (50,  -seed)
+                    priority=(50, -seed),
                 )
 
     for seed in seeds:
@@ -243,7 +245,7 @@ if HOST == "brain.usc.edu":
                     kl_target_stat="max",
                     ent_coef=0.01,
                     kl_loss_coeff_lr=0.01,
-                    n_steps = n_steps,
+                    n_steps=n_steps,
                     historic_buffer_size=n_steps,
                     second_loop_batch_size=n_steps // 2,
                     batch_size=500,
@@ -252,7 +254,7 @@ if HOST == "brain.usc.edu":
                         "n_steps",
                         "ent_coef",
                     ],
-                    priority = (50, -seed)
+                    priority=(50, -seed),
                 )
             # for kl_target_stat in ["max", "mean", "logmax"]:
             #     if kl_target_stat == "mean":
@@ -270,7 +272,7 @@ if HOST == "brain.usc.edu":
             #             kl_loss_coeff_lr=0.01,
             #             kl_target_stat=kl_target_stat,
             #         )
-            #for kl_target_stat in ["logmax", "cubeispmax"]:
+            # for kl_target_stat in ["logmax", "cubeispmax"]:
             # for kl_target_stat in ["logmax", "ispmax", "cubeispmax"]:
             #     for kl_loss_coeff_lr in [0.001, 0.01, 0.1, 1.0]:
             #         xppo_mujoco(
@@ -360,8 +362,7 @@ elif HOST == "resl34":
     # Full GPU utalization
     GLOBAL_CONTEXT.max_concurrent_jobs = 6
 
-
-    with open('trust-region-layers/configs/pg/mujoco_papi_config.json') as f:
+    with open("trust-region-layers/configs/pg/mujoco_papi_config.json") as f:
         papi_conf = json.load(f)
 
     for seed in seeds:
@@ -372,10 +373,16 @@ elif HOST == "resl34":
             papi_conf["seed"] = seed
             papi_conf["env"] = env
             papi_conf["out_dir"] = f"data_tmp/{out_dir}"
-            with open(conf_name, 'w') as f:
+            with open(conf_name, "w") as f:
                 json.dump(papi_conf, f, indent=2)
-            cmd("python", "trust-region-layers/main.py", conf_name, extra_outputs=[Out(out_dir)],
-                cores=3, ram_gb=8)
+            cmd(
+                "python",
+                "trust-region-layers/main.py",
+                conf_name,
+                extra_outputs=[Out(out_dir)],
+                cores=3,
+                ram_gb=8,
+            )
 
     # for seed in seeds:
     #     seed = seed + 10000
@@ -400,6 +407,52 @@ elif HOST == "resl34":
     #                         maximum_kl_loss_coeff=256,
     #                         **n_epochs_args,
     #                     )
+elif HOST == "tanuki":
+    GLOBAL_CONTEXT.max_concurrent_jobs = 4
+    ram_gb = 4
+    early_stop_epoch = False
+    incremental_beta = True
+    incremental_beta_step = 0.1
+
+    for seed in seeds[:5]:
+        for env, total_steps in [
+            ("pick-place", 10_000_000),
+        ]:
+            n_steps = 10_000
+            xppo_mt10(
+                seed=seed,
+                env=f"{env}-v2",
+                note="xppo_mt10_incremental_beta",
+                target_kl=0.2,
+                vf_coef=0.1,
+                kl_target_stat="max",
+                ent_coef=0.01,
+                kl_loss_coeff_lr=0.01,
+                n_steps=n_steps,
+                historic_buffer_size=n_steps,
+                second_loop_batch_size=n_steps // 2,
+                batch_size=500,
+                total_steps=total_steps,
+                incremental_beta=incremental_beta,
+                incremental_beta_step=incremental_beta_step,
+                bang_bang_kl_loss_opt=False,
+                v_trace=False,
+                bang_bang_reset_kl_loss_coeff=False,
+                early_stop_epoch=False,
+                multi_step_trust_region=False,
+                second_loop_vf=False,
+                reset_beta=False,
+                add_to_path=[
+                    "target_kl",
+                    "n_steps",
+                    "ent_coef",
+                    "incremental_beta",
+                    "incremental_beta_step",
+                ],
+                priority=(50, -seed),
+            )
+
+
 elif HOST == "stygian":
     GLOBAL_CONTEXT.max_concurrent_jobs = 4
     ram_gb = 4

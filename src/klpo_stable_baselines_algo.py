@@ -135,6 +135,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         min_kl_loss_coeff: float = 0.01,
         bang_bang_kl_loss_opt: bool = False,
         bang_bang_reset_kl_loss_coeff: bool = False,
+        incremental_beta: bool = False,
+        incremental_beta_step: float = 0.01,
         kl_target_stat: str,
         optimize_log_loss_coeff: bool = False,
         reset_optimizers: bool = False,
@@ -154,7 +156,6 @@ class KLPOStbl(OnPolicyAlgorithm):
         v_trace: bool = False,
         reset_beta: bool = False,
     ):
-
         assert not multi_step_trust_region, "Are you sure you want to do this?"
         super().__init__(
             policy,
@@ -257,6 +258,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._max_kl_loss_coeff = maximum_kl_loss_coeff
         self._bang_bang_kl_loss_opt = bang_bang_kl_loss_opt
         self._bang_bang_reset_kl_loss_coeff = bang_bang_reset_kl_loss_coeff
+        self._incremental_beta = incremental_beta
+        self._incremental_beta_step = incremental_beta_step
         self._eval_policy = eval_policy
         self._debug_plots = debug_plots
         self._debug_pkls = debug_pkls
@@ -489,7 +492,9 @@ class KLPOStbl(OnPolicyAlgorithm):
             # self._kl_loss_coeff_param is the "log loss coeff"
 
             if (
-                not self._bang_bang_kl_loss_opt and not use_pg_loss
+                not self._bang_bang_kl_loss_opt
+                and not self._incremental_beta_step
+                and not use_pg_loss
             ):  # Omitting L_beta from the loss
                 target_kl = th.tensor(self.target_kl)
                 # Needed to move the inverse soft-plus zero
@@ -509,12 +514,12 @@ class KLPOStbl(OnPolicyAlgorithm):
                 elif self._kl_target_stat == "ispmax":
                     # Inverse soft-plus with zero at target_kl
                     loss += self._kl_loss_coeff_param * (
-                        th.log(th.expm1(ln_2 * kl_div.max()/target_kl))
+                        th.log(th.expm1(ln_2 * kl_div.max() / target_kl))
                     )
                 elif self._kl_target_stat == "cubeispmax":
                     # Cube of inverse soft-plus with zero at target_kl
                     loss += self._kl_loss_coeff_param * (
-                        th.log(th.expm1(ln_2 * kl_div.max()/target_kl)) ** 3
+                        th.log(th.expm1(ln_2 * kl_div.max() / target_kl)) ** 3
                     )
                 else:
                     raise ValueError("Invalid kl_target_stat")
@@ -531,10 +536,19 @@ class KLPOStbl(OnPolicyAlgorithm):
                 )
             self.policy.optimizer.step()
             self._kl_loss_coeff_opt.step()
+
+            if self._incremental_beta:
+                with th.no_grad():
+                    self._kl_loss_coeff_param.copy_(
+                        self._kl_loss_coeff_param.item() + self._incremental_beta_step
+                    )
+
             if self._optimize_log_loss_coeff:
                 if self._kl_loss_coeff_param < np.log2(self._min_kl_loss_coeff):
                     with th.no_grad():
-                        self._kl_loss_coeff_param.copy_(np.log2(self._min_kl_loss_coeff))
+                        self._kl_loss_coeff_param.copy_(
+                            np.log2(self._min_kl_loss_coeff)
+                        )
                 elif self._kl_loss_coeff_param > np.log2(self._max_kl_loss_coeff):
                     with th.no_grad():
                         self._kl_loss_coeff_param.copy_(
@@ -549,6 +563,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                     with th.no_grad():
                         self._kl_loss_coeff_param.copy_(self._max_kl_loss_coeff)
             # kl_loss_coeffs.append(self._kl_loss_coeff_param.item())
+
             return kl_div
 
         second_penalty_loops = []
@@ -660,7 +675,9 @@ class KLPOStbl(OnPolicyAlgorithm):
                             second_loop_skips.append(False)
                             n_second_loop_backward += 1
                         n_second_loop_minibatch += 1
-                    assert total_minibatches != 0, "Should have at least one second-loop minibatch"
+                    assert (
+                        total_minibatches != 0
+                    ), "Should have at least one second-loop minibatch"
                     second_penalty_skip_ratio.append(
                         skipped_minibatches / total_minibatches
                     )
@@ -842,7 +859,6 @@ class KLPOStbl(OnPolicyAlgorithm):
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
     ):
-
         return super().learn(
             total_timesteps=total_timesteps,
             callback=callback,
@@ -876,7 +892,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         remaining_space = self.historic_buffer.buffer_size - self.historic_buffer.pos
 
         assert buffer_len != 0, "Empty batch being copied over to the historic buffer"
-        
+
         if remaining_space < buffer_len and isinstance(
             self.historic_buffer, VTraceRolloutBuffer
         ):

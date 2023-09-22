@@ -10,7 +10,8 @@ from klpo_stable_baselines_algo import KLPOStbl
 from stable_baselines3.common.logger import configure
 import random
 from metaworld.envs.mujoco.sawyer_xyz.v2 import SawyerReachEnvV2
-#from metaworld.envs.mujoco.env_dict import MT10_V2
+
+# from metaworld.envs.mujoco.env_dict import MT10_V2
 from metaworld.envs.mujoco.env_dict import MT50_V2
 import os
 
@@ -57,6 +58,8 @@ def klpo_stbl_MT10(
     maximum_kl_loss_coeff,
     max_path_length,
     reset_beta: bool,
+    incremental_beta: bool,
+    incremental_beta_step: float,
     early_stop_epoch: Optional[bool] = False,
     early_stop_across_epochs: Optional[bool] = False,
     bang_bang_kl_loss_opt: Optional[bool] = False,
@@ -97,6 +100,8 @@ def klpo_stbl_MT10(
         early_stop_across_epochs=early_stop_across_epochs,
         bang_bang_kl_loss_opt=bang_bang_kl_loss_opt,
         bang_bang_reset_kl_loss_coeff=bang_bang_reset_kl_loss_coeff,
+        incremental_beta=incremental_beta,
+        incremental_beta_step=incremental_beta_step,
         v_trace=v_trace,
         reset_beta=reset_beta,
         vf_coef=vf_coef,
@@ -143,6 +148,8 @@ if __name__ == "__main__":
         early_stop_across_epochs: bool = False,
         bang_bang_kl_loss_opt: bool = False,
         bang_bang_reset_kl_loss_coeff: bool = False,
+        incremental_beta_step: float = 0.01,
+        incremental_beta: bool = False,
         v_trace: bool = False,
         reset_beta: bool = True,
         vf_coef=0.5,
@@ -179,6 +186,8 @@ if __name__ == "__main__":
             early_stop_across_epochs=early_stop_across_epochs,
             bang_bang_kl_loss_opt=bang_bang_kl_loss_opt,
             bang_bang_reset_kl_loss_coeff=bang_bang_reset_kl_loss_coeff,
+            incremental_beta=incremental_beta,
+            incremental_beta_step=incremental_beta_step,
             v_trace=v_trace,
             reset_beta=reset_beta,
             vf_coef=vf_coef,
