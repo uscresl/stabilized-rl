@@ -412,7 +412,7 @@ elif HOST == "tanuki":
     ram_gb = 4
     early_stop_epoch = False
     incremental_beta = True
-    incremental_beta_step = 0.1
+    incremental_beta_step = 0.01
 
     for seed in seeds[:5]:
         for env, total_steps in [
