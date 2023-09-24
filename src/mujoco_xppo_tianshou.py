@@ -50,7 +50,7 @@ def get_args():
     parser.add_argument("--value-clip", type=int, default=1)
     parser.add_argument("--norm-adv", type=int, default=0)
     parser.add_argument("--recompute-adv", type=int, default=0)
-    parser.add_argument("--logdir", type=str, default="log")
+    parser.add_argument("--log-dir", type=str)
     parser.add_argument("--render", type=float, default=0.)
     parser.add_argument("--fixup-every-repeat", type=int, default=1)
     parser.add_argument("--fixup-loop", type=int, default=1)
@@ -187,24 +187,18 @@ def test_xppo(args=get_args()):
     train_collector = Collector(policy, train_envs, buffer, exploration_noise=True)
     test_collector = Collector(policy, test_envs)
 
-    # log
-    now = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
-    args.algo_name = "xppo"
-    log_name = os.path.join(args.env, args.algo_name, str(args.seed), now)
-    log_path = os.path.join(args.logdir, log_name)
-
     # logger
     if args.logger == "wandb":
         os.environ["WANDB_RUN_GROUP"] = args.wandb_group
         logger = WandbLogger(
             save_interval=1,
-            name=log_name.replace(os.path.sep, "__"),
+            name=None,
             entity=args.wandb_entity,
             run_id=args.resume_id,
             config=args,
             project=args.wandb_project,
         )
-    writer = SummaryWriter(log_path)
+    writer = SummaryWriter(args.log_dir)
     writer.add_text("args", str(args))
     if args.logger == "tensorboard":
         logger = TensorboardLogger(writer)
@@ -213,7 +207,7 @@ def test_xppo(args=get_args()):
 
     def save_best_fn(policy):
         state = {"model": policy.state_dict(), "obs_rms": train_envs.get_obs_rms()}
-        torch.save(state, os.path.join(log_path, "policy.pth"))
+        torch.save(state, os.path.join(args.log_dir, "policy.pth"))
 
     if not args.watch:
         # trainer

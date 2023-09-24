@@ -4,13 +4,6 @@ import random
 import json
 from subprocess import run
 
-# import plot_all_csvs
-import sys
-from metaworld.envs.mujoco.env_dict import MT10_V2
-
-# Uncomment to stop starting new runs
-# sys.exit(1)
-
 HOST = gethostname()
 
 if HOST == "brain.usc.edu":
@@ -47,7 +40,8 @@ if HOST == "brain.usc.edu":
             GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
             # GLOBAL_CONTEXT.max_concurrent_jobs -= 1
         #print(f"Setting GLOBAL_CONTEXT.max_concurrent_jobs = {GLOBAL_CONTEXT.max_concurrent_jobs}")
-    MAX_CONCURRENT_JOBS = 10
+    # MAX_CONCURRENT_JOBS = 10
+    MAX_CONCURRENT_JOBS = 0
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
 
