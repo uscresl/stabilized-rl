@@ -38,7 +38,10 @@ if HOST == "brain.usc.edu":
                 )
             # Someone is waiting (maybe us), don't start any more jobs
             GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
-        # print(f"Setting GLOBAL_CONTEXT.max_concurrent_jobs = {GLOBAL_CONTEXT.max_concurrent_jobs}")
+        #print(f"Setting GLOBAL_CONTEXT.max_concurrent_jobs = {GLOBAL_CONTEXT.max_concurrent_jobs}")
+    MAX_CONCURRENT_JOBS = 100
+    if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
+        GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
 
 
 MT50_ENV_NAMES = [
