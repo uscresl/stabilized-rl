@@ -47,7 +47,7 @@ if HOST == "brain.usc.edu":
             GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
             # GLOBAL_CONTEXT.max_concurrent_jobs -= 1
         #print(f"Setting GLOBAL_CONTEXT.max_concurrent_jobs = {GLOBAL_CONTEXT.max_concurrent_jobs}")
-    MAX_CONCURRENT_JOBS = 200
+    MAX_CONCURRENT_JOBS = 10
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
 
@@ -202,38 +202,38 @@ def xppo_mt10(
 
 
 if HOST == "brain.usc.edu":
-    for seed in seeds:
-        for env in MT50_ENV_NAMES:
-            total_steps = 20_000_000
-            for n_steps in [10_000, 50_000]:
-                xppo_mt10(
-                    seed=seed,
-                    env=f"{env}-v2",
-                    note="xppo_mt10_no_reset_50k",
-                    target_kl=0.2,
-                    vf_coef=0.1,
-                    kl_target_stat="max",
-                    ent_coef=0.01,
-                    kl_loss_coeff_lr=0.01,
-                    n_steps=n_steps,
-                    historic_buffer_size=n_steps,
-                    second_loop_batch_size=n_steps // 2,
-                    batch_size=500,
-                    total_steps=total_steps,
-                    bang_bang_kl_loss_opt=False,
-                    v_trace=False,
-                    bang_bang_reset_kl_loss_coeff=False,
-                    early_stop_epoch=False,
-                    multi_step_trust_region=False,
-                    second_loop_vf=False,
-                    reset_beta=False,
-                    add_to_path=[
-                        "target_kl",
-                        "n_steps",
-                        "ent_coef",
-                    ],
-                    priority=(50, -seed),
-                )
+    # for seed in seeds:
+    #     for env in MT50_ENV_NAMES:
+    #         total_steps = 20_000_000
+    #         for n_steps in [10_000, 50_000]:
+    #             xppo_mt10(
+    #                 seed=seed,
+    #                 env=f"{env}-v2",
+    #                 note="xppo_mt10_no_reset_50k",
+    #                 target_kl=0.2,
+    #                 vf_coef=0.1,
+    #                 kl_target_stat="max",
+    #                 ent_coef=0.01,
+    #                 kl_loss_coeff_lr=0.01,
+    #                 n_steps=n_steps,
+    #                 historic_buffer_size=n_steps,
+    #                 second_loop_batch_size=n_steps // 2,
+    #                 batch_size=500,
+    #                 total_steps=total_steps,
+    #                 bang_bang_kl_loss_opt=False,
+    #                 v_trace=False,
+    #                 bang_bang_reset_kl_loss_coeff=False,
+    #                 early_stop_epoch=False,
+    #                 multi_step_trust_region=False,
+    #                 second_loop_vf=False,
+    #                 reset_beta=False,
+    #                 add_to_path=[
+    #                     "target_kl",
+    #                     "n_steps",
+    #                     "ent_coef",
+    #                 ],
+    #                 priority=(50, -seed),
+    #             )
 
     for seed in seeds:
         for env in [
