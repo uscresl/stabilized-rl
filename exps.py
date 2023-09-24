@@ -27,7 +27,14 @@ if HOST == "brain.usc.edu":
     squeue_res = run(["squeue", "--all"], check=False, capture_output=True)
     if squeue_res.returncode == 0:
         out = squeue_res.stdout.decode()
-        if "(Priority)" not in out and "(Resources)" not in out:
+        found_waiting_normal_job = False
+        for line in out.split('\n'):
+            if "(Priority)" in line or "(Resources)" in line:
+                if "slurm-lon" not in line:
+                    found_waiting_normal_job = True
+                    # print("Found waiting job")
+                    # print(line)
+        if not found_waiting_normal_job:
             # Presumably free resources on the cluster
             GLOBAL_CONTEXT.max_concurrent_jobs += 1
             # print(f"Setting GLOBAL_CONTEXT.max_concurrent_jobs = {GLOBAL_CONTEXT.max_concurrent_jobs}")
@@ -38,8 +45,9 @@ if HOST == "brain.usc.edu":
                 )
             # Someone is waiting (maybe us), don't start any more jobs
             GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
+            # GLOBAL_CONTEXT.max_concurrent_jobs -= 1
         #print(f"Setting GLOBAL_CONTEXT.max_concurrent_jobs = {GLOBAL_CONTEXT.max_concurrent_jobs}")
-    MAX_CONCURRENT_JOBS = 100
+    MAX_CONCURRENT_JOBS = 200
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
 
@@ -238,6 +246,29 @@ if HOST == "brain.usc.edu":
 
     for seed in seeds:
         for env in mujoco_envs:
+            xppo_mujoco(
+                seed=seed,
+                env=env,
+                note="xppo_losses_sweep",
+                target_kl=0.2,
+                kl_loss_coeff_lr=0.01,
+                second_loop_pg_loss=True,
+                priority=(52, -seed),
+            )
+            for second_loop_every_epoch in [True, False]:
+                for first_loop_beta_loss in [True, False]:
+                    for kl_loss_coeff_lr in [0.001, 0.01, 0.1]:
+                        xppo_mujoco(
+                            seed=seed,
+                            env=env,
+                            note="xppo_losses_sweep",
+                            target_kl=0.2,
+                            kl_loss_coeff_lr=kl_loss_coeff_lr,
+                            kl_target_stat="max",
+                            second_loop_every_epoch=second_loop_every_epoch,
+                            first_loop_beta_loss=first_loop_beta_loss,
+                            priority=(52, -seed),
+                        )
             for n_steps in [10_000, 50_000]:
                 xppo_mujoco(
                     seed=seed,
@@ -257,7 +288,30 @@ if HOST == "brain.usc.edu":
                         "n_steps",
                         "ent_coef",
                     ],
-                    priority=(50, -seed),
+                    priority=(51, -seed),
+                )
+                xppo_mujoco(
+                    seed=seed,
+                    env=env,
+                    note="xppo_mujoco_metaworld_hparams2",
+                    target_kl=0.2,
+                    vf_coef=0.1,
+                    kl_target_stat="max",
+                    ent_coef=0.01,
+                    kl_loss_coeff_lr=0.01,
+                    n_steps=n_steps,
+                    historic_buffer_size=n_steps,
+                    second_loop_batch_size=n_steps // 2,
+                    batch_size=500,
+                    second_loop_every_epoch=False,
+                    first_loop_beta_loss=True,
+                    add_to_path=[
+                        "target_kl",
+                        "n_steps",
+                        "ent_coef",
+                        "kl_target_stat",
+                    ],
+                    priority=(53, -seed),
                 )
             # for kl_target_stat in ["max", "mean", "logmax"]:
             #     if kl_target_stat == "mean":
