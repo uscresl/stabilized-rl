@@ -66,6 +66,7 @@ def klpo_stbl_MT10(
     bang_bang_reset_kl_loss_coeff: Optional[bool] = False,
     v_trace: bool = False,
     vf_coef: float = 0.5,
+    second_loop_every_epoch,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -105,6 +106,7 @@ def klpo_stbl_MT10(
         v_trace=v_trace,
         reset_beta=reset_beta,
         vf_coef=vf_coef,
+        second_loop_every_epoch=second_loop_every_epoch,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -153,6 +155,7 @@ if __name__ == "__main__":
         v_trace: bool = False,
         reset_beta: bool = True,
         vf_coef=0.5,
+        second_loop_every_epoch: bool = True,
     ):
         env, max_path_length = gen_env(env)
         klpo_stbl_MT10(
@@ -191,4 +194,5 @@ if __name__ == "__main__":
             v_trace=v_trace,
             reset_beta=reset_beta,
             vf_coef=vf_coef,
+            second_loop_every_epoch=second_loop_every_epoch,
         )

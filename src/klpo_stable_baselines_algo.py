@@ -155,6 +155,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         early_stop_across_epochs: Optional[bool] = False,
         v_trace: bool = False,
         reset_beta: bool = False,
+        second_loop_every_epoch: bool = True,
     ):
         assert not multi_step_trust_region, "Are you sure you want to do this?"
         super().__init__(
@@ -268,6 +269,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._early_stop_across_epochs = early_stop_across_epochs
         self._reset_beta = reset_beta
         self._min_kl_loss_coeff = min_kl_loss_coeff
+        self._second_loop_every_epoch = second_loop_every_epoch
 
     def _setup_model(self) -> None:
         self._setup_lr_schedule()
@@ -646,13 +648,19 @@ class KLPOStbl(OnPolicyAlgorithm):
             n_second_loop_backward = 0
             second_loop_skips = []
 
+            if self._second_loop_every_epoch:
+                should_run_second_loop = self._second_penalty_loop
+            else:
+                is_last_epoch = not continue_training or epoch + 1 >= self.n_epochs
+                should_run_second_loop = self._second_penalty_loop and is_last_epoch
+
             if (
                 self._bang_bang_kl_loss_opt
             ):  # Will set the kl_loss_coeff_param to maximum value before second loop.
                 with th.no_grad():
                     self._kl_loss_coeff_param.copy_(self._max_kl_loss_coeff)
             if self._sparse_second_loop:
-                while self._second_penalty_loop:
+                while should_run_second_loop:
                     skipped_minibatches = 0
                     total_minibatches = 0
                     for historic_data in sample_partial_buffer(
@@ -695,7 +703,7 @@ class KLPOStbl(OnPolicyAlgorithm):
                         self.logger.record("train/broke_loop", 1)
                         break
             else:
-                while self._second_penalty_loop:
+                while should_run_second_loop:
                     if self._kl_target_stat == "mean":
                         if kl_div.mean() <= self.target_kl:
                             break
