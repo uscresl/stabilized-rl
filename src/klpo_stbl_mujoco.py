@@ -48,6 +48,8 @@ def klpo_stbl(
     v_trace,
     reset_beta,
     second_loop_every_epoch,
+    first_loop_beta_loss,
+    second_loop_pg_loss,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -88,6 +90,8 @@ def klpo_stbl(
         v_trace=v_trace,
         reset_beta=reset_beta,
         second_loop_every_epoch=second_loop_every_epoch,
+        first_loop_beta_loss=first_loop_beta_loss,
+        second_loop_pg_loss=second_loop_pg_loss,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -135,6 +139,8 @@ if __name__ == "__main__":
         v_trace: bool = False,
         reset_beta: bool = False,
         second_loop_every_epoch: bool = True,
+        first_loop_beta_loss: bool = False,
+        second_loop_pg_loss: bool = False,
     ):
         klpo_stbl(
             dict(log_dir=log_dir),
@@ -173,4 +179,6 @@ if __name__ == "__main__":
             v_trace=v_trace,
             reset_beta=reset_beta,
             second_loop_every_epoch=second_loop_every_epoch,
+            first_loop_beta_loss=first_loop_beta_loss,
+            second_loop_pg_loss=second_loop_pg_loss,
         )

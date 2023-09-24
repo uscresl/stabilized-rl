@@ -60,13 +60,15 @@ def klpo_stbl_MT10(
     reset_beta: bool,
     incremental_beta: bool,
     incremental_beta_step: float,
-    early_stop_epoch: Optional[bool] = False,
-    early_stop_across_epochs: Optional[bool] = False,
-    bang_bang_kl_loss_opt: Optional[bool] = False,
-    bang_bang_reset_kl_loss_coeff: Optional[bool] = False,
-    v_trace: bool = False,
-    vf_coef: float = 0.5,
+    early_stop_epoch: bool,
+    early_stop_across_epochs: bool,
+    bang_bang_kl_loss_opt: bool,
+    bang_bang_reset_kl_loss_coeff: bool,
+    v_trace: bool,
+    vf_coef: float,
     second_loop_every_epoch,
+    first_loop_beta_loss,
+    second_loop_pg_loss,
 ):
     model = KLPOStbl(
         "MlpPolicy",
@@ -107,6 +109,8 @@ def klpo_stbl_MT10(
         reset_beta=reset_beta,
         vf_coef=vf_coef,
         second_loop_every_epoch=second_loop_every_epoch,
+        first_loop_beta_loss=first_loop_beta_loss,
+        second_loop_pg_loss=second_loop_pg_loss,
     )
 
     new_logger = configure(ctxt.snapshot_dir, ["stdout", "log", "csv", "tensorboard"])
@@ -156,6 +160,8 @@ if __name__ == "__main__":
         reset_beta: bool = True,
         vf_coef=0.5,
         second_loop_every_epoch: bool = True,
+        first_loop_beta_loss: bool = False,
+        second_loop_pg_loss: bool = False,
     ):
         env, max_path_length = gen_env(env)
         klpo_stbl_MT10(
@@ -195,4 +201,6 @@ if __name__ == "__main__":
             reset_beta=reset_beta,
             vf_coef=vf_coef,
             second_loop_every_epoch=second_loop_every_epoch,
+            first_loop_beta_loss=first_loop_beta_loss,
+            second_loop_pg_loss=second_loop_pg_loss,
         )
