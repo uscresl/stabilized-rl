@@ -156,6 +156,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         v_trace: bool = False,
         reset_beta: bool = False,
         second_loop_every_epoch: bool = True,
+        first_loop_beta_loss: bool = False,
+        second_loop_pg_loss: bool = False,
     ):
         assert not multi_step_trust_region, "Are you sure you want to do this?"
         super().__init__(
@@ -270,6 +272,8 @@ class KLPOStbl(OnPolicyAlgorithm):
         self._reset_beta = reset_beta
         self._min_kl_loss_coeff = min_kl_loss_coeff
         self._second_loop_every_epoch = second_loop_every_epoch
+        self._first_loop_beta_loss = first_loop_beta_loss
+        self._second_loop_pg_loss = second_loop_pg_loss
 
     def _setup_model(self) -> None:
         self._setup_lr_schedule()
@@ -367,7 +371,7 @@ class KLPOStbl(OnPolicyAlgorithm):
         full_kl_divs = []
         full_max_kl_divs = []
 
-        def minibatch_step(rollout_data, use_pg_loss):
+        def minibatch_step(rollout_data, use_pg_loss, in_second_loop):
             actions = rollout_data.actions
             if isinstance(self.action_space, spaces.Discrete):
                 # Convert discrete action from float to long
@@ -452,10 +456,11 @@ class KLPOStbl(OnPolicyAlgorithm):
             else:
                 loss_coeff_param = self._kl_loss_coeff_param
 
-            if use_pg_loss:
+            if not in_second_loop:
                 loss += loss_coeff_param.detach() * kl_div.mean()
             else:
-                loss = th.tensor(0.0).to(self.device)
+                if not use_pg_loss:
+                    loss = th.tensor(0.0).to(self.device)
                 if self._second_loop_vf:
                     for r_data in sample_partial_buffer(self.rollout_buffer):
                         acts = r_data.actions
@@ -496,7 +501,7 @@ class KLPOStbl(OnPolicyAlgorithm):
             if (
                 not self._bang_bang_kl_loss_opt
                 and not self._incremental_beta_step
-                and not use_pg_loss
+                and (in_second_loop or self._first_loop_beta_loss)
             ):  # Omitting L_beta from the loss
                 target_kl = th.tensor(self.target_kl)
                 # Needed to move the inverse soft-plus zero
@@ -620,7 +625,8 @@ class KLPOStbl(OnPolicyAlgorithm):
                 )
             n_first_loop_minibatch = 0
             for rollout_data in self.rollout_buffer.get(self.batch_size):
-                kl_div = minibatch_step(rollout_data=rollout_data, use_pg_loss=True)
+                kl_div = minibatch_step(rollout_data=rollout_data,
+                                        use_pg_loss=True, in_second_loop=False)
 
                 if (
                     self._early_stop_epoch or self._early_stop_across_epochs
@@ -668,7 +674,9 @@ class KLPOStbl(OnPolicyAlgorithm):
                     ):
                         total_minibatches += 1
                         kl_div = minibatch_step(
-                            rollout_data=historic_data, use_pg_loss=False
+                            rollout_data=historic_data,
+                            use_pg_loss=self._second_loop_pg_loss,
+                            in_second_loop=True
                         )
                         if (kl_div <= self.target_kl).all():
                             second_loop_skips.append(True)
@@ -714,7 +722,9 @@ class KLPOStbl(OnPolicyAlgorithm):
                     for historic_data in sample_partial_buffer(self.historic_buffer):
                         # This rollout_data is not used to compute KL div
                         kl_div = minibatch_step(
-                            rollout_data=historic_data, use_pg_loss=False
+                            rollout_data=historic_data,
+                            use_pg_loss=self._second_loop_pg_loss,
+                            in_second_loop=True
                         )
                         second_penalty_skip_ratio.append(0)
                     if penalty_loops > SECOND_PENALTY_LOOP_MAX:
