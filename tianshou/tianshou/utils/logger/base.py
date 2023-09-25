@@ -55,6 +55,8 @@ class BaseLogger(ABC):
                     "train/reward": collect_result["rew"],
                     "train/length": collect_result["len"],
                 }
+                if "success_rate" in collect_result:
+                    log_data["train/success_rate"] = collect_result["success_rate"]
                 self.write("train/env_step", step, log_data)
                 self.last_log_train_step = step
 
@@ -74,6 +76,8 @@ class BaseLogger(ABC):
                 "test/reward_std": collect_result["rew_std"],
                 "test/length_std": collect_result["len_std"],
             }
+            if "success_rate" in collect_result:
+                log_data["test/success_rate"] = collect_result["success_rate"]
             self.write("test/env_step", step, log_data)
             self.last_log_test_step = step
 

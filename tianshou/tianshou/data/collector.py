@@ -250,6 +250,8 @@ class Collector(object):
 
         start_time = time.time()
 
+        ep_success = np.zeros(self.env_num, dtype=bool)
+        episode_success_rates = []
         step_count = 0
         episode_count = 0
         episode_rews = []
@@ -297,6 +299,9 @@ class Collector(object):
                 ready_env_ids
             )
             done = np.logical_or(terminated, truncated)
+            if "success" in info[0]:
+                success = np.asarray([inf["success"] for inf in info], dtype=bool)
+                ep_success |= success
 
             self.data.update(
                 obs_next=obs_next,
@@ -338,6 +343,8 @@ class Collector(object):
                 episode_count += len(env_ind_local)
                 episode_lens.append(ep_len[env_ind_local])
                 episode_rews.append(ep_rew[env_ind_local])
+                episode_success_rates.append(ep_success[env_ind_local].astype('float32'))
+                ep_success[env_ind_local] = False
                 episode_start_indices.append(ep_idx[env_ind_local])
                 # now we copy obs_next to obs, but since there might be
                 # finished episodes, we have to reset finished envs first.
@@ -391,9 +398,11 @@ class Collector(object):
             )
             rew_mean, rew_std = rews.mean(), rews.std()
             len_mean, len_std = lens.mean(), lens.std()
+            success_rate_mean = np.concatenate(episode_success_rates).mean()
         else:
             rews, lens, idxs = np.array([]), np.array([], int), np.array([], int)
             rew_mean = rew_std = len_mean = len_std = 0
+            success_rate_mean = 0.
 
         return {
             "n/ep": episode_count,
@@ -405,6 +414,7 @@ class Collector(object):
             "len": len_mean,
             "rew_std": rew_std,
             "len_std": len_std,
+            "success_rate": success_rate_mean,
         }
 
 
@@ -499,6 +509,8 @@ class AsyncCollector(Collector):
 
         start_time = time.time()
 
+        ep_success = np.zeros(self.env_num, dtype=bool)
+        episode_success_rates = []
         step_count = 0
         episode_count = 0
         episode_rews = []
@@ -556,6 +568,9 @@ class AsyncCollector(Collector):
                 ready_env_ids
             )
             done = np.logical_or(terminated, truncated)
+            if "success" in info[0]:
+                success = np.asarray([inf["success"] for inf in info], dtype=bool)
+                ep_success |= success
 
             # change self.data here because ready_env_ids has changed
             try:
@@ -615,6 +630,8 @@ class AsyncCollector(Collector):
                 episode_count += len(env_ind_local)
                 episode_lens.append(ep_len[env_ind_local])
                 episode_rews.append(ep_rew[env_ind_local])
+                episode_success_rates.append(ep_success[env_ind_local].astype('float32'))
+                ep_success[env_ind_local] = False
                 episode_start_indices.append(ep_idx[env_ind_local])
                 # now we copy obs_next to obs, but since there might be
                 # finished episodes, we have to reset finished envs first.
@@ -655,9 +672,11 @@ class AsyncCollector(Collector):
             )
             rew_mean, rew_std = rews.mean(), rews.std()
             len_mean, len_std = lens.mean(), lens.std()
+            success_rate_mean = np.concatenate(episode_success_rates).mean()
         else:
             rews, lens, idxs = np.array([]), np.array([], int), np.array([], int)
             rew_mean = rew_std = len_mean = len_std = 0
+            success_rate_mean = 0.
 
         return {
             "n/ep": episode_count,
@@ -669,4 +688,5 @@ class AsyncCollector(Collector):
             "len": len_mean,
             "rew_std": rew_std,
             "len_std": len_std,
+            "success_rate": success_rate_mean,
         }

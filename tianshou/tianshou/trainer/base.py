@@ -353,12 +353,22 @@ class BaseTrainer(ABC):
             if self.save_best_fn:
                 self.save_best_fn(self.policy)
         if self.verbose:
-            print(
-                f"Epoch #{self.epoch}: test_reward: {rew:.6f} ± {rew_std:.6f},"
-                f" best_reward: {self.best_reward:.6f} ± "
-                f"{self.best_reward_std:.6f} in #{self.best_epoch}",
-                flush=True
-            )
+            if "success_rate" in test_result:
+                success_rate = test_result["success_rate"]
+                print(
+                    f"Epoch #{self.epoch}: test_reward: {rew:.6f} ± {rew_std:.6f},"
+                    f" success_rate: {success_rate:.3f},"
+                    f" best_reward: {self.best_reward:.6f} ± "
+                    f"{self.best_reward_std:.6f} in #{self.best_epoch}",
+                    flush=True
+                )
+            else:
+                print(
+                    f"Epoch #{self.epoch}: test_reward: {rew:.6f} ± {rew_std:.6f},"
+                    f" best_reward: {self.best_reward:.6f} ± "
+                    f"{self.best_reward_std:.6f} in #{self.best_epoch}",
+                    flush=True
+                )
         if not self.is_run:
             test_stat = {
                 "test_reward": rew,
@@ -367,6 +377,8 @@ class BaseTrainer(ABC):
                 "best_reward_std": self.best_reward_std,
                 "best_epoch": self.best_epoch
             }
+            if "success_rate" in test_result:
+                test_stat["success_rate"] = test_result["success_rate"]
         else:
             test_stat = {}
         if self.stop_fn and self.stop_fn(self.best_reward):
