@@ -626,10 +626,17 @@ def create_observable_goal_envs():
                 env.seed(seed)
                 np.random.set_state(st0)
 
+        def reset(self, seed=None, *args, **kwargs):
+            if seed is not None:
+                self.seed(seed)
+            obs = env_cls.reset(self)
+            return obs, {}
+
         d['__init__'] = initialize
         og_env_name = re.sub("(^|[-])\s*([a-zA-Z])",
                              lambda p: p.group(0).upper(), env_name)
         og_env_name = og_env_name.replace("-", "")
+        d['reset'] = reset
 
         og_env_key = '{}-goal-observable'.format(env_name)
         og_env_name = '{}GoalObservable'.format(og_env_name)
