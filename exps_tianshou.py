@@ -6,7 +6,11 @@ import math
 
 HOST = gethostname()
 
-if HOST == "brain.usc.edu":
+# XXX Remember to redact these before review
+WANDB_ENTITY = "resl-mixppo"
+BRAIN_HOSTNAME = "brain.usc.edu"
+
+if HOST == BRAIN_HOSTNAME:
     MIN_CONCURRENT_JOBS = 10
     GLOBAL_CONTEXT.max_core_alloc = 600
     squeue_res = run(["squeue", "--all"], check=False, capture_output=True)
@@ -23,13 +27,14 @@ if HOST == "brain.usc.edu":
             # Presumably free resources on the cluster
             GLOBAL_CONTEXT.max_concurrent_jobs += 1
         else:
-            if GLOBAL_CONTEXT.max_concurrent_jobs != MIN_CONCURRENT_JOBS:
-                print(
-                    f"GLOBAL_CONTEXT.max_concurrent_jobs was {GLOBAL_CONTEXT.max_concurrent_jobs}"
-                )
+            if GLOBAL_CONTEXT.max_concurrent_jobs > len(GLOBAL_CONTEXT.running):
+                # print(
+                #     f"GLOBAL_CONTEXT.max_concurrent_jobs was {GLOBAL_CONTEXT.max_concurrent_jobs}"
+                # )
+                print(f"Running {len(GLOBAL_CONTEXT.running)} jobs")
             # Someone is waiting (maybe us), don't start any more jobs
-            GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
-    MAX_CONCURRENT_JOBS = 200
+            GLOBAL_CONTEXT.max_concurrent_jobs = len(GLOBAL_CONTEXT.running) - 1
+    MAX_CONCURRENT_JOBS = 100
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
 
@@ -70,7 +75,7 @@ def mujoco_xppo_tianshou(
         "--epoch", EPOCHS,
         "--step-per-epoch", math.ceil(total_steps / EPOCHS),
         *[f"--{k.replace('_', '-')}={v}" for (k, v) in kwargs.items()],
-        "--wandb-entity", "resl-mixppo",
+        "--wandb-entity", WANDB_ENTITY,
         "--wandb-group",
         group,
         "--log-dir",
@@ -81,51 +86,61 @@ def mujoco_xppo_tianshou(
         cores=cores,
     )
 
-if HOST == "brain.usc.edu":
+if HOST == BRAIN_HOSTNAME:
+    # for seed in seeds:
+    #     for env in mujoco_env_names_v3:
+    #             total_steps = 10_000_000
+    #             group = "xppo-tianshou-mujoco-core-profile"
+    #             cores = seed + 2
+    #             cmd(
+    #                 "python",
+    #                 "src/mujoco_xppo_tianshou.py",
+    #                 "--seed",
+    #                 seed,
+    #                 "--env",
+    #                 env,
+    #                 "--epoch", EPOCHS,
+    #                 "--step-per-epoch", math.ceil(total_steps / EPOCHS),
+    #                 "--wandb-entity", WANDB_ENTITY,
+    #                 "--wandb-group",
+    #                 "xppo-tianshou-mujoco-core-profile",
+    #                 "--log-dir",
+    #                 Out(f"xppo_tianshou/env={env}_seed={seed}_cores={cores}_group={group}/"),
+    #                 warmup_time=3,
+    #                 ram_gb=6,
+    #                 priority=(60, -seed),
+    #                 cores=cores,
+    #             )
     for seed in seeds:
-        for env in mujoco_env_names_v3:
-                total_steps = 10_000_000
-                group = "xppo-tianshou-mujoco-core-profile"
-                cores = seed + 2
-                cmd(
-                    "python",
-                    "src/mujoco_xppo_tianshou.py",
-                    "--seed",
-                    seed,
-                    "--env",
-                    env,
-                    "--epoch", EPOCHS,
-                    "--step-per-epoch", math.ceil(total_steps / EPOCHS),
-                    "--wandb-entity", "resl-mixppo",
-                    "--wandb-group",
-                    "xppo-tianshou-mujoco-core-profile",
-                    "--log-dir",
-                    Out(f"xppo_tianshou/env={env}_seed={seed}_cores={cores}_group={group}/"),
-                    warmup_time=3,
-                    ram_gb=6,
-                    priority=(60, -seed),
-                    cores=cores,
-                )
-    for seed in seeds:
-        for env in mujoco_env_names_v3:
-            mujoco_xppo_tianshou(
-                seed=seed,
-                env=env,
-                group="xppo-tianshou-mujoco",
-                target_coeff=3)
-            mujoco_xppo_tianshou(
-                seed=seed,
-                env=env,
-                group="xppo-tianshou-mujoco",
-                fixup_every_repeat=0)
-            mujoco_xppo_tianshou(
-                seed=seed,
-                env=env,
-                group="xppo-tianshou-mujoco",
-                fixup_loop=0)
-            mujoco_xppo_tianshou(
-                seed=seed,
-                env=env,
-                group="xppo-tianshou-mujoco",
-                kl_target_stat="mean",
-                priority=(51, -seed))
+        for env_i, env in enumerate(mujoco_env_names_v3):
+            for eps_kl_args in [{"eps_kl": 0.2}, {}, {"eps_kl": 1.0}]:
+                for target_coeff in [1, 2, 3, 5, 10]:
+                    mujoco_xppo_tianshou(
+                        seed=seed,
+                        env=env,
+                        group="xppo-tianshou-mujoco",
+                        target_coeff=target_coeff,
+                        **eps_kl_args,
+                        priority=(50, -env_i, -seed, -target_coeff))
+                    mujoco_xppo_tianshou(
+                        seed=seed,
+                        env=env,
+                        group="xppo-tianshou-mujoco",
+                        fixup_every_repeat=0,
+                        target_coeff=target_coeff,
+                        **eps_kl_args,
+                        priority=(51, -env_i, -seed))
+                mujoco_xppo_tianshou(
+                    seed=seed,
+                    env=env,
+                    group="xppo-tianshou-mujoco",
+                    fixup_loop=0,
+                    **eps_kl_args,
+                    priority=(50, -env_i, -seed))
+                mujoco_xppo_tianshou(
+                    seed=seed,
+                    env=env,
+                    group="xppo-tianshou-mujoco",
+                    kl_target_stat="mean",
+                    **eps_kl_args,
+                    priority=(50, -env_i, -seed))
