@@ -4,7 +4,7 @@ from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE
 from gym.wrappers import TimeLimit
 
 def gen_env(env_name: str):
-    env = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[env_name](seed=0)
+    env = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[env_name + "-v2-goal-observable"](seed=0)
     env.seeded_rand_vec = True
     env = TimeLimit(env, max_episode_steps=500)
     return env
