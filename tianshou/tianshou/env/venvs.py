@@ -46,8 +46,13 @@ def _patch_env_generator(fn: Callable[[], ENV_TYPE]) -> Callable[[], gym.Env]:
         ), "Env generators that are provided to vector environemnts must be callable."
 
         env = fn()
-        if isinstance(env, (gym.Env, PettingZooEnv)):
-            return env
+        if PettingZooEnv is not None:
+            if isinstance(env, (gym.Env, PettingZooEnv)):
+                return env
+        else:
+            if isinstance(env, gym.Env):
+                print("Is gymnasium Env")
+                return env
 
         if not has_old_gym or not isinstance(env, old_gym.Env):
             raise ValueError(
@@ -79,7 +84,7 @@ def _patch_env_generator(fn: Callable[[], ENV_TYPE]) -> Callable[[], gym.Env]:
         if gym_version >= packaging.version.parse("0.26.0"):
             return shimmy.GymV26CompatibilityV0(env=env)
         elif gym_version >= packaging.version.parse("0.22.0"):
-            return shimmy.GymV22CompatibilityV0(env=env)
+            return shimmy.GymV21CompatibilityV0(env=env)
         else:
             raise Exception(
                 f"Found OpenAI Gym version {gym.__version__}. "
