@@ -299,7 +299,7 @@ class Collector(object):
                 ready_env_ids
             )
             done = np.logical_or(terminated, truncated)
-            if "success" in info[0]:
+            if not isinstance(info, dict) and "success" in info[0]:
                 success = np.asarray([inf["success"] for inf in info], dtype=bool)
                 ep_success |= success
 
