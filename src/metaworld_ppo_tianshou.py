@@ -13,20 +13,19 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.tensorboard import SummaryWriter
 
 from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
+from tianshou.policy import PPOPolicy
 from tianshou.trainer import onpolicy_trainer
 from tianshou.utils import TensorboardLogger, WandbLogger
 from tianshou.utils.net.common import Net
 from tianshou.utils.net.continuous import ActorProb, Critic
 
-from mujoco_env_tianshou import make_mujoco_env
 from metaworld_env_tianshou import make_metaworld_env
-from xppo_tianshou import XPPOPolicy
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="pick-place")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--buffer-size", type=int, default=10_000)
+    parser.add_argument("--buffer-size", type=int, default=50_000)
     parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[128, 128])
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--gamma", type=float, default=0.99)
@@ -40,23 +39,17 @@ def get_args():
     # ppo special
     parser.add_argument("--rew-norm", type=int, default=True)
     parser.add_argument("--vf-coef", type=float, default=0.25)
-    parser.add_argument("--ent-coef", type=float, default=0.0)
+    parser.add_argument("--ent-coef", type=float, default=0.01)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--bound-action-method", type=str, default="clip")
     parser.add_argument("--lr-decay", type=int, default=True)
     parser.add_argument("--max-grad-norm", type=float, default=0.5)
-    parser.add_argument("--eps-kl", type=float, default=0.5)
-    parser.add_argument("--beta-lr", type=float, default=0.01)
-    parser.add_argument("--fixup-batchsize", type=int, default=5_000)
+    parser.add_argument("--eps-clip", type=float, default=0.2)
+    parser.add_argument("--dual-clip", type=float, default=None)
     parser.add_argument("--value-clip", type=int, default=1)
     parser.add_argument("--norm-adv", type=int, default=0)
     parser.add_argument("--recompute-adv", type=int, default=0)
-    parser.add_argument("--logdir", type=str, default="log")
     parser.add_argument("--render", type=float, default=0.)
-    parser.add_argument("--fixup-loop", type=int, default=1)
-    parser.add_argument("--fixup-every-repeat", type=int, default=1)
-    parser.add_argument("--kl-target-stat", type=str, default="max")
-    parser.add_argument("--target-coeff", type=float, default=3.)
     parser.add_argument(
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
@@ -70,7 +63,7 @@ def get_args():
         choices=["tensorboard", "wandb"],
     )
     parser.add_argument("--wandb-project", type=str, default="stabilized-rl")
-    parser.add_argument("--wandb-group", type=str, default="xppo")
+    parser.add_argument("--wandb-group", type=str, default="ppo")
     parser.add_argument("--wandb-entity", type=str, default=None)
     parser.add_argument(
         "--watch",
@@ -147,7 +140,7 @@ def test_xppo(args=get_args()):
     def dist(*logits):
         return Independent(Normal(*logits), 1)
 
-    policy = XPPOPolicy(
+    policy = PPOPolicy(
         actor,
         critic,
         optim,
@@ -162,13 +155,9 @@ def test_xppo(args=get_args()):
         action_bound_method=args.bound_action_method,
         lr_scheduler=lr_scheduler,
         action_space=env.action_space,
-        eps_kl=args.eps_kl,
-        beta_lr=args.beta_lr,
-        fixup_batchsize=args.fixup_batchsize,
-        fixup_loop=args.fixup_loop,
-        fixup_every_repeat=args.fixup_every_repeat,
-        target_coeff=args.target_coeff,
+        eps_clip=args.eps_clip,
         value_clip=args.value_clip,
+        dual_clip=args.dual_clip,
         advantage_normalization=args.norm_adv,
         recompute_advantage=args.recompute_adv,
     )

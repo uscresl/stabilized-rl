@@ -34,10 +34,11 @@ if HOST == BRAIN_HOSTNAME:
                 print(f"Running {len(GLOBAL_CONTEXT.running)} jobs")
             # Someone is waiting (maybe us), don't start any more jobs
             GLOBAL_CONTEXT.max_concurrent_jobs = len(GLOBAL_CONTEXT.running) - 1
-    MAX_CONCURRENT_JOBS = 200
+    MAX_CONCURRENT_JOBS = 160
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
 
+# print(f"Running {len(GLOBAL_CONTEXT.running)} jobs")
 
 seeds = list(range(10))
 
@@ -173,6 +174,39 @@ def metaworld_xppo_tianshou(
         cores=cores,
     )
 
+def metaworld_ppo_tianshou(
+    seed, env, group, priority=None, cores=2, add_to_path=None, total_steps=None, **kwargs
+):
+    if total_steps is None:
+        total_steps = 20_000_000
+    if priority is None:
+        priority = (50, -seed)
+    if add_to_path is None:
+        add_to_path = [k for k, _ in kwargs.items()][:5]
+    kwargs_path = "_".join(
+        f"{k.replace('_', '-')}={kwargs.get(k)}" for k in add_to_path
+    )
+    return cmd(
+        "python",
+        "src/metaworld_ppo_tianshou.py",
+        "--seed",
+        seed,
+        "--env",
+        env,
+        "--epoch", EPOCHS,
+        "--step-per-epoch", math.ceil(total_steps / EPOCHS),
+        *[f"--{k.replace('_', '-')}={v}" for (k, v) in kwargs.items()],
+        "--wandb-entity", WANDB_ENTITY,
+        "--wandb-group",
+        group,
+        "--log-dir",
+        Out(f"ppo_tianshou/env={env}_seed={seed}_{kwargs_path}_group={group}/"),
+        warmup_time=3,
+        ram_gb=6,
+        priority=priority,
+        cores=cores,
+    )
+
 if HOST == BRAIN_HOSTNAME:
     # for seed in seeds:
     #     for env in mujoco_env_names_v3:
@@ -204,6 +238,34 @@ if HOST == BRAIN_HOSTNAME:
                 seed=seed,
                 env=env,
                 group="xppo-tianshou-metaworld",
+                step_per_collect=10_000,
+                priority=(60, -seed),
+            )
+            metaworld_xppo_tianshou(
+                seed=seed,
+                env=env,
+                group="xppo-tianshou-metaworld",
+                step_per_collect=50_000,
+                priority=(60, -seed),
+            )
+            metaworld_xppo_tianshou(
+                seed=seed,
+                env=env,
+                group="xppo-tianshou-metaworld",
+                fixup_every_repeat=0,
+                priority=(60, -seed),
+            )
+            metaworld_ppo_tianshou(
+                seed=seed,
+                env=env,
+                group="ppo-tianshou-metaworld",
+                priority=(60, -seed),
+            )
+            metaworld_ppo_tianshou(
+                seed=seed,
+                env=env,
+                group="ppo-tianshou-metaworld",
+                step_per_collect=10_000,
                 priority=(60, -seed),
             )
 
