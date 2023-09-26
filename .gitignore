@@ -11,3 +11,5 @@ __pycache__
 *.pdf
 /.venv*
 /log
+*.so.*
+/trust_region_layers_cpp_deps/*

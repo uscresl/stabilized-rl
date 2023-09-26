@@ -16,3 +16,8 @@ pip install shimmy
 pip install envpool
 pip install "cython<3"
 pip install "gym==0.22.0"
+
+pushd trust_region_layers_cpp_deps/nlopt
+cmake && make .
+popd
+pip install -e trust-region-layers/cpp_projection
