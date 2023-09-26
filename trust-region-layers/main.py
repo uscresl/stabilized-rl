@@ -19,8 +19,10 @@ import json
 import logging
 from glob import glob
 from multiprocessing import JoinableQueue, Process
-
 import os
+import shutil
+
+import wandb
 
 from trust_region_projections.algorithms.pg.pg import PolicyGradient
 from trust_region_projections.utils.custom_store import CustomStore
@@ -54,7 +56,7 @@ def multithreaded_run(agent_configs: str, agent_generator: callable, num_threads
     q.join()
 
 
-def single_run(agent_config: str, agent_generator: callable):
+def single_run(agent_config: str, agent_generator: callable, wandb_group: str):
     params = json.load(open(agent_config))
 
     # generate name
@@ -86,6 +88,15 @@ def single_run(agent_config: str, agent_generator: callable):
                     f"seed{params['seed']}"
     })
 
+    wandb.init(
+        group=wandb_group,
+        sync_tensorboard=True,
+        resume="allow",
+        config=params,
+    )
+    if os.path.exists(params['out_dir']):
+        shutil.rmtree(params['out_dir'])
+
     agent = agent_generator(params)
     agent.learn()
     agent.store.close()
@@ -97,6 +108,7 @@ if __name__ == '__main__':
     # parser.add_argument('--algorithm', type=str, default="pg", help='Specify which algorithm to use.')
     parser.add_argument('--load-exp-name', type=str, default=None, help='Load model from specified location.')
     parser.add_argument('--train-steps', type=int, default=None, help='New total training steps.', )
+    parser.add_argument('--wandb-group', type=str, default="trust-region-layers", help='WandB group.', )
     parser.add_argument('--test', action='store_true', help='Only test loaded model.', )
     parser.add_argument('--num-threads', type=int, default=10,
                         help='Number of threads for running multiple experiments.', )
@@ -116,6 +128,7 @@ if __name__ == '__main__':
         agent.store.close()
 
     if not os.path.isfile(path):
+        assert False, "WandB not setup for multithreaded runs"
         multithreaded_run(path, get_new_ppo_agent, num_threads=args.num_threads)
     else:
-        single_run(path, get_new_ppo_agent)
+        single_run(path, get_new_ppo_agent, args.wandb_group)

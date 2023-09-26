@@ -55,7 +55,7 @@ class SequentialVectorEnv(gym.Env):
         - states, a (actors, ... state_shape) tensor with resulting states
         - dones, an actors-length tensor with 1 if terminal, 0 otw
         """
-        rewards, dones = np.zeros(self.num_envs), np.zeros(self.num_envs, np.bool)
+        rewards, dones = np.zeros(self.num_envs), np.zeros(self.num_envs, np.bool_)
         states = np.zeros((self.num_envs,) + self.observation_space.shape)
         ep_info = defaultdict(list)
 

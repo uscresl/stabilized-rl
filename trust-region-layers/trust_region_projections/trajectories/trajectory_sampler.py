@@ -167,7 +167,7 @@ class TrajectorySampler(object):
         ep_lengths = np.zeros((n_runs, self.n_test_envs,))
 
         for i in range(n_runs):
-            not_dones = np.ones((self.n_test_envs,), np.bool)
+            not_dones = np.ones((self.n_test_envs,), np.bool_)
             obs = self.envs.reset_test()
             while np.any(not_dones):
                 ep_lengths[i, not_dones] += 1

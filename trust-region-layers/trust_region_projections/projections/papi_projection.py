@@ -60,13 +60,17 @@ class PAPIProjection(BaseProjectionLayer):
         """
 
         assert entropy_first
+        # super().__init__(proj_type, mean_bound, cov_bound, 0.0, False, None, None, None, 0.0, 0.0, entropy_eq,
+        #                  entropy_first, cpu, dtype)
         super().__init__(proj_type, mean_bound, cov_bound, 0.0, False, None, None, None, 0.0, 0.0, entropy_eq,
-                         entropy_first, cpu, dtype)
+                         entropy_first, do_regression=kwargs['do_regression'], regression_iters=kwargs['regression_iters'],
+                         regression_lr=kwargs['regression_lr'], optimizer_type_reg=kwargs['optimizer_type_reg'],
+                         cpu=cpu, dtype=dtype)
 
         self.last_policies = []
 
     def __call__(self, policy, p, q, step=0, *args, **kwargs):
-        if kwargs.get("obs"):
+        if "obs" in kwargs:
             self._papi_steps(policy, q, **kwargs)
         else:
             return p
@@ -183,7 +187,8 @@ class PAPIProjection(BaseProjectionLayer):
 
         for i, pi in enumerate(reversed(self.last_policies)):
             p_prime = pi(obs)
-            mean_part, cov_part = pi.kl_divergence(p_prime, q)
+            # mean_part, cov_part = pi.kl_divergence(p_prime, q)
+            mean_part, cov_part = gaussian_kl(pi, p_prime, q)
             if (mean_part + cov_part).mean() <= self.mean_bound + self.cov_bound:
                 intermed_policy = pi
                 n_backtracks = i
