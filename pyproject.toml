@@ -26,7 +26,7 @@ ray = "^2.0.0"
 mujoco-py = "^2.1.2"
 scikit-learn = "^1.1.2"
 tqdm = "^4.64.1"
-gym = "^0.21"
+gym = "0.22.0"
 polars = "^0.16.1"
 plotly = "^5.13.0"
 doexp = {path = "./doexp", develop = true}
@@ -37,7 +37,6 @@ tensorboard = "^2.6.0"
 jupyter = "^1.0.0"
 pytest = "^5.4.3"
 ipdb = "^0.13.2"
-stable-baselines3 = {extras = ["extra"], version = "^1.6.2"}
 
 [tool.pyright]
 include = ["src"]
