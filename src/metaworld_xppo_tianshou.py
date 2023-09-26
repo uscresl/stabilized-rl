@@ -51,7 +51,6 @@ def get_args():
     parser.add_argument("--value-clip", type=int, default=1)
     parser.add_argument("--norm-adv", type=int, default=0)
     parser.add_argument("--recompute-adv", type=int, default=0)
-    parser.add_argument("--logdir", type=str, default="log")
     parser.add_argument("--render", type=float, default=0.)
     parser.add_argument("--fixup-loop", type=int, default=1)
     parser.add_argument("--fixup-every-repeat", type=int, default=1)

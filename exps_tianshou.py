@@ -34,7 +34,7 @@ if HOST == BRAIN_HOSTNAME:
                 print(f"Running {len(GLOBAL_CONTEXT.running)} jobs")
             # Someone is waiting (maybe us), don't start any more jobs
             GLOBAL_CONTEXT.max_concurrent_jobs = len(GLOBAL_CONTEXT.running) - 1
-    MAX_CONCURRENT_JOBS = 160
+    MAX_CONCURRENT_JOBS = 300
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
 
