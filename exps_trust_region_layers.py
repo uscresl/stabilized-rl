@@ -1,12 +1,42 @@
 from doexp import cmd, In, Out, GLOBAL_CONTEXT
 from socket import gethostname
+from subprocess import run
 import json
-import sys
 from datetime import datetime
+import os
 
 HOST = gethostname()
-if HOST == "brain.usc.edu":
-    GLOBAL_CONTEXT.max_concurrent_jobs = 1
+
+# XXX Remember to redact these before review
+WANDB_ENTITY = "resl-mixppo"
+BRAIN_HOSTNAME = "brain.usc.edu"
+os.environ["WANDB_ENTITY"] = WANDB_ENTITY
+os.environ["WANDB_PROJECT"] = "stabilized-rl"
+
+if HOST == BRAIN_HOSTNAME:
+    MIN_CONCURRENT_JOBS = 1
+    GLOBAL_CONTEXT.max_core_alloc = 600
+    squeue_res = run(["squeue", "--all"], check=False, capture_output=True)
+    if squeue_res.returncode == 0:
+        out = squeue_res.stdout.decode()
+        found_waiting_normal_job = False
+        for line in out.split('\n'):
+            if "(Priority)" in line or "(Resources)" in line:
+                if "slurm-lon" not in line:
+                    found_waiting_normal_job = True
+        if not found_waiting_normal_job:
+            # Presumably free resources on the cluster
+            GLOBAL_CONTEXT.max_concurrent_jobs += 1
+        else:
+            if GLOBAL_CONTEXT.max_concurrent_jobs > len(GLOBAL_CONTEXT.running):
+                print(f"Running {len(GLOBAL_CONTEXT.running)} jobs")
+            # Someone is waiting (maybe us), don't start any more jobs
+            GLOBAL_CONTEXT.max_concurrent_jobs = len(GLOBAL_CONTEXT.running) - 1
+    #MAX_CONCURRENT_JOBS = 300
+    MAX_CONCURRENT_JOBS = 1
+    # MAX_CONCURRENT_JOBS = 0
+    if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
+        GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
 
 
 mujoco_envs = [
@@ -137,4 +167,4 @@ for seed in seeds:
         with open(conf_name, 'w') as f:
             json.dump(mt_kl_conf, f, indent=2)
         cmd("python", "trust-region-layers/main.py", conf_name, "--wandb-group=trust-region-layers-kl-metaworld", extra_outputs=[Out(out_dir)],
-            cores=3, ram_gb=8, priority=(20, -seed))
+            cores=4, ram_gb=8, priority=(20, -seed))

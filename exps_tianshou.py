@@ -24,20 +24,16 @@ if HOST == BRAIN_HOSTNAME:
             if "(Priority)" in line or "(Resources)" in line:
                 if "slurm-lon" not in line:
                     found_waiting_normal_job = True
-                    # print("Found waiting job")
-                    # print(line)
         if not found_waiting_normal_job:
             # Presumably free resources on the cluster
             GLOBAL_CONTEXT.max_concurrent_jobs += 1
         else:
             if GLOBAL_CONTEXT.max_concurrent_jobs > len(GLOBAL_CONTEXT.running):
-                # print(
-                #     f"GLOBAL_CONTEXT.max_concurrent_jobs was {GLOBAL_CONTEXT.max_concurrent_jobs}"
-                # )
                 print(f"Running {len(GLOBAL_CONTEXT.running)} jobs")
             # Someone is waiting (maybe us), don't start any more jobs
             GLOBAL_CONTEXT.max_concurrent_jobs = len(GLOBAL_CONTEXT.running) - 1
-    MAX_CONCURRENT_JOBS = 300
+    # MAX_CONCURRENT_JOBS = 300
+    MAX_CONCURRENT_JOBS = 0
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
 
