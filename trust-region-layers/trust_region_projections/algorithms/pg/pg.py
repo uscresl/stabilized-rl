@@ -32,6 +32,7 @@ from trust_region_projections.projections.base_projection_layer import BaseProje
 from trust_region_projections.projections.projection_factory import get_projection_layer
 from trust_region_projections.trajectories.dataclass import TrajectoryOnPolicy
 from trust_region_projections.trajectories.trajectory_sampler import TrajectorySampler
+from trust_region_projections.utils import make_env
 from trust_region_projections.utils.custom_store import CustomStore
 from trust_region_projections.utils.network_utils import get_lr_schedule, get_optimizer
 from trust_region_projections.utils.torch_utils import flatten_batch, generate_minibatches, get_numpy, \
@@ -625,7 +626,7 @@ class PolicyGradient(AbstractAlgorithm):
 
         print(params)
 
-        env = gym.make(params['game'])
+        env = make_env(params['game'])
         obs_dim = env.observation_space.shape[0]
         action_dim = env.action_space.shape[0]
 

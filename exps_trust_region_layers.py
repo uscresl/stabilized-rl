@@ -28,6 +28,60 @@ mujoco_env_names_v3 = [
     "Reacher-v2",
 ]
 
+MT50_ENV_NAMES = [
+    "assembly",
+    "basketball",
+    "bin-picking",
+    "box-close",
+    "button-press-topdown",
+    "button-press-topdown-wall",
+    "button-press",
+    "button-press-wall",
+    "coffee-button",
+    "coffee-pull",
+    "coffee-push",
+    "dial-turn",
+    "disassemble",
+    "door-close",
+    "door-lock",
+    "door-open",
+    "door-unlock",
+    "hand-insert",
+    "drawer-close",
+    "drawer-open",
+    "faucet-open",
+    "faucet-close",
+    "hammer",
+    "handle-press-side",
+    "handle-press",
+    "handle-pull-side",
+    "handle-pull",
+    "lever-pull",
+    "peg-insert-side",
+    "pick-place-wall",
+    "pick-out-of-hole",
+    "reach",
+    "push-back",
+    "push",
+    "pick-place",
+    "plate-slide",
+    "plate-slide-side",
+    "plate-slide-back",
+    "plate-slide-back-side",
+    "peg-unplug-side",
+    "soccer",
+    "stick-push",
+    "stick-pull",
+    "push-wall",
+    "reach-wall",
+    "shelf-place",
+    "sweep-into",
+    "sweep",
+    "window-open",
+    "window-close",
+]
+
+
 with open('trust-region-layers/configs/pg/mujoco_kl_config.json') as f:
     kl_config = json.load(f)
 
@@ -46,7 +100,7 @@ for seed in seeds:
         with open(conf_name, 'w') as f:
             json.dump(kl_config, f, indent=2)
         cmd("python", "trust-region-layers/main.py", conf_name, extra_outputs=[Out(out_dir)],
-            cores=3, ram_gb=8)
+            cores=3, ram_gb=8, priority=(10, -seed))
 
         conf_name = f"data_tmp/trust-region-layers_papi_seed={seed}_env={env}.json"
         out_dir = f"trust-region-layers_papi_seed={seed}_env={env}/"
@@ -58,4 +112,29 @@ for seed in seeds:
         with open(conf_name, 'w') as f:
             json.dump(papi_conf, f, indent=2)
         cmd("python", "trust-region-layers/main.py", conf_name, extra_outputs=[Out(out_dir)],
-            cores=3, ram_gb=8)
+            cores=3, ram_gb=8, priority=(10, -seed))
+
+    for env in MT50_ENV_NAMES:
+        env = "metaworld-" + env
+        mt_kl_conf = kl_config.copy()
+        conf_name = f"data_tmp/trust-region-layers_kl_seed={seed}_env={env}.json"
+        out_dir = f"trust-region-layers_kl_seed={seed}_env={env}/"
+        mt_kl_conf["n_envs"] = 10  # Should only affect sampling speed
+        mt_kl_conf["n_test_envs"] = 10  # Should only affect sampling speed
+        mt_kl_conf["seed"] = seed
+        mt_kl_conf["game"] = env
+        mt_kl_conf["out_dir"] = f"data_tmp/{out_dir}"
+        mt_kl_conf["exp_name"] = f'seed_{seed}_env_{env}_{datetime.now().strftime("%Y%m%d_%H%M%S_%f")}'
+
+        # Meta-World Specific
+        mt_kl_conf["rollout_steps"] = 50_000
+        mt_kl_conf["max_episode_length"] = 500
+        mt_kl_conf["max_entropy_coeff"] = 0.01
+        mt_kl_conf["train_steps"] = 400
+        mt_kl_conf["hidden_sizes_policy"] = [128, 128]
+        mt_kl_conf["hidden_sizes_vf"] = [128, 128]
+
+        with open(conf_name, 'w') as f:
+            json.dump(mt_kl_conf, f, indent=2)
+        cmd("python", "trust-region-layers/main.py", conf_name, "--wandb-group=trust-region-layers-kl-metaworld", extra_outputs=[Out(out_dir)],
+            cores=3, ram_gb=8, priority=(20, -seed))

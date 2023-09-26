@@ -620,6 +620,7 @@ def create_observable_goal_envs():
             env._partially_observable = False
             env._freeze_rand_vec = False
             env._set_task_called = True
+            env.add_reset_info = True
             env.reset()
             env._freeze_rand_vec = True
             if seed is not None:
@@ -630,7 +631,10 @@ def create_observable_goal_envs():
             if seed is not None:
                 self.seed(seed)
             obs = env_cls.reset(self)
-            return obs, {}
+            if self.add_reset_info:
+                return obs, {}
+            else:
+                return obs
 
         d['__init__'] = initialize
         og_env_name = re.sub("(^|[-])\s*([a-zA-Z])",

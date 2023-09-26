@@ -19,6 +19,7 @@ from typing import Union
 
 from trust_region_projections.trajectories.env_normalizer import BaseNormalizer, MovingAvgNormalizer
 from trust_region_projections.trajectories.vector_env import SequentialVectorEnv
+import trust_region_projections.utils as utils
 
 
 def make_env(env_id: str, seed: int, rank: int) -> callable:
@@ -35,7 +36,7 @@ def make_env(env_id: str, seed: int, rank: int) -> callable:
     """
 
     def _get_env():
-        env = gym.make(env_id)
+        env = utils.make_env(env_id)
         env.seed(seed + rank)
         return env
 

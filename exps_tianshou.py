@@ -249,7 +249,7 @@ if HOST == BRAIN_HOSTNAME:
                 env=env,
                 group="xppo-tianshou-metaworld",
                 step_per_collect=50_000,
-                priority=(60, -seed),
+                priority=(61, -seed),
             )
             metaworld_xppo_tianshou(
                 seed=seed,
@@ -262,7 +262,7 @@ if HOST == BRAIN_HOSTNAME:
                 seed=seed,
                 env=env,
                 group="ppo-tianshou-metaworld",
-                priority=(60, -seed),
+                priority=(61, -seed),
             )
             metaworld_ppo_tianshou(
                 seed=seed,
