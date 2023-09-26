@@ -10,6 +10,7 @@ __pycache__
 /wandb
 *.pdf
 /.venv*
-/log
+/log*
 *.so.*
 /trust_region_layers_cpp_deps/*
+/runs*
