@@ -15,4 +15,4 @@ pip install scipy
 pip install shimmy
 pip install envpool
 pip install "cython<3"
-pip install "gym>=0.22.0,<0.26.0"
+pip install "gym==0.22.0"
