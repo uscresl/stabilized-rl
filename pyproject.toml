@@ -29,8 +29,6 @@ tqdm = "^4.64.1"
 gym = "^0.21"
 polars = "^0.16.1"
 plotly = "^5.13.0"
-cliport = {path = "./cliport", develop = true}
-sample-factory = {path = "./sample-factory", develop = true}
 doexp = {path = "./doexp", develop = true}
 protobuf = "<3.21"
 
