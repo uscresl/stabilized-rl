@@ -2,6 +2,7 @@ from doexp import cmd, In, Out, GLOBAL_CONTEXT
 from socket import gethostname
 from subprocess import run
 import math
+import os
 
 
 HOST = gethostname()
@@ -9,6 +10,8 @@ HOST = gethostname()
 # XXX Remember to redact these before review
 WANDB_ENTITY = "resl-mixppo"
 BRAIN_HOSTNAME = "brain.usc.edu"
+os.environ["WANDB_ENTITY"] = WANDB_ENTITY
+os.environ["WANDB_PROJECT"] = "stabilized-rl"
 
 if HOST == BRAIN_HOSTNAME:
     MIN_CONCURRENT_JOBS = 10
