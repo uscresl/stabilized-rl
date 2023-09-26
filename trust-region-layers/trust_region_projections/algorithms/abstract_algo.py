@@ -107,6 +107,7 @@ class AbstractAlgorithm(abc.ABC):
             'step_reward': float,
             'length': float,
             'length_std': float,
+            'success_rate': float,
         }
         self.store.add_table('exploration_reward', reward_schema)
         self.store.add_table('evaluation_reward', reward_schema)
@@ -188,7 +189,8 @@ class AbstractAlgorithm(abc.ABC):
                f"Min/Max {type} reward: {reward_dict['min']:.4f}/{reward_dict['max']:.4f} | " \
                f"Avg. step {type} reward: {reward_dict['step_reward']:.4f} | " \
                f"Avg. {type} episode length: {reward_dict['length']:.4f} +/- " \
-               f"{reward_dict['length_std'] :.2f}"
+               f"{reward_dict['length_std'] :.2f} | " \
+               f"Avg. success rate: {reward_dict['success_rate'] :.3f}"
 
     def regression_step(self, obs: ch.Tensor, q: Tuple[ch.Tensor, ch.Tensor], n_minibatches: int, logging_step: int):
         """

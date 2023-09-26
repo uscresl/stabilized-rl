@@ -33,7 +33,7 @@ if HOST == BRAIN_HOSTNAME:
             # Someone is waiting (maybe us), don't start any more jobs
             GLOBAL_CONTEXT.max_concurrent_jobs = len(GLOBAL_CONTEXT.running) - 1
     #MAX_CONCURRENT_JOBS = 300
-    MAX_CONCURRENT_JOBS = 1
+    MAX_CONCURRENT_JOBS = 200
     # MAX_CONCURRENT_JOBS = 0
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
@@ -147,7 +147,7 @@ for seed in seeds:
     for env in MT50_ENV_NAMES:
         env = "metaworld-" + env
         mt_kl_conf = kl_config.copy()
-        conf_name = f"data_tmp/trust-region-layers_kl_seed={seed}_env={env}.json"
+        conf_name = f"data_tmp/trust-region-layers_kl_seed={seed}_env={env}_logged.json"
         out_dir = f"trust-region-layers_kl_seed={seed}_env={env}/"
         mt_kl_conf["n_envs"] = 10  # Should only affect sampling speed
         mt_kl_conf["n_test_envs"] = 10  # Should only affect sampling speed
@@ -158,13 +158,14 @@ for seed in seeds:
 
         # Meta-World Specific
         mt_kl_conf["rollout_steps"] = 50_000
-        mt_kl_conf["max_episode_length"] = 500
         mt_kl_conf["max_entropy_coeff"] = 0.01
+        mt_kl_conf["max_episode_length"] = 500
+        mt_kl_conf["epochs"] = 10
         mt_kl_conf["train_steps"] = 400
         mt_kl_conf["hidden_sizes_policy"] = [128, 128]
         mt_kl_conf["hidden_sizes_vf"] = [128, 128]
 
         with open(conf_name, 'w') as f:
             json.dump(mt_kl_conf, f, indent=2)
-        cmd("python", "trust-region-layers/main.py", conf_name, "--wandb-group=trust-region-layers-kl-metaworld", extra_outputs=[Out(out_dir)],
-            cores=4, ram_gb=8, priority=(20, -seed))
+        cmd("python", "trust-region-layers/main.py", conf_name, "--wandb-group=trust-region-layers-kl-metaworld-logged", extra_outputs=[Out(out_dir)],
+            cores=2, ram_gb=8, priority=(20, -seed))

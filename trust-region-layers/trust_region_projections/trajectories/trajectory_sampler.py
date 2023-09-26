@@ -64,6 +64,7 @@ class TrajectorySampler(object):
 
         self.total_rewards = collections.deque(maxlen=100)
         self.total_steps = collections.deque(maxlen=100)
+        self.total_success = collections.deque(maxlen=100)
 
         self.envs = NormalizedEnvWrapper(env_id, n_envs, n_test_envs, max_episode_length=max_episode_length,
                                          gamma=discount_factor, norm_obs=norm_obs, clip_obs=clip_obs,
@@ -143,9 +144,10 @@ class TrajectorySampler(object):
 
         if ep_infos:
             ep_infos = np.array(ep_infos)
-            ep_length, ep_reward = ep_infos[:, 0], ep_infos[:, 1]
+            ep_length, ep_reward, ep_success = ep_infos[:, 0], ep_infos[:, 1], ep_infos[:, 2]
             self.total_rewards.extend(ep_reward)
             self.total_steps.extend(ep_length)
+            self.total_success.extend(ep_success)
 
         return TrajectoryOnPolicyRaw(*out)
 
@@ -165,9 +167,11 @@ class TrajectorySampler(object):
         n_runs = 1
         ep_rewards = np.zeros((n_runs, self.n_test_envs,))
         ep_lengths = np.zeros((n_runs, self.n_test_envs,))
+        ep_success = np.zeros((n_runs, self.n_test_envs,))
 
         for i in range(n_runs):
             not_dones = np.ones((self.n_test_envs,), np.bool_)
+            successful_episode = np.ones((self.n_test_envs,), np.bool_)
             obs = self.envs.reset_test()
             while np.any(not_dones):
                 ep_lengths[i, not_dones] += 1
@@ -178,20 +182,23 @@ class TrajectorySampler(object):
                     actions = p[0] if deterministic else policy.sample(p)
                     actions = policy.squash(actions)
                 obs, rews, dones, infos = self.envs.step_test(get_numpy(actions))
+                for j, step_infos in enumerate(infos["info"]):
+                    ep_success[i, j] = max(ep_success[i, j], step_infos.get("success", 0.0))
                 ep_rewards[i, not_dones] += rews[not_dones]
 
                 # only set to False when env has never terminated before, otherwise we favor earlier terminating envs.
                 not_dones = np.logical_and(~dones, not_dones)
 
-        return self.get_reward_dict(ep_rewards, ep_lengths)
+        return self.get_reward_dict(ep_rewards, ep_lengths, ep_success)
 
     def get_exploration_performance(self):
         ep_reward = np.array(self.total_rewards)
         ep_length = np.array(self.total_steps)
-        return self.get_reward_dict(ep_reward, ep_length)
+        ep_success = np.array(self.total_success)
+        return self.get_reward_dict(ep_reward, ep_length, ep_success)
 
     @staticmethod
-    def get_reward_dict(ep_reward, ep_length):
+    def get_reward_dict(ep_reward, ep_length, ep_success):
         return {
             'mean': ep_reward.mean().item(),
             'std': ep_reward.std().item(),
@@ -200,6 +207,7 @@ class TrajectorySampler(object):
             'step_reward': (ep_reward / ep_length).mean().item(),
             'length': ep_length.mean().item(),
             'length_std': ep_length.std().item(),
+            'success_rate': ep_success.mean().item(),
         }
 
     @property

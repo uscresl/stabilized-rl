@@ -40,6 +40,7 @@ class SequentialVectorEnv(gym.Env):
         self.max_episode_length = max_episode_length
         self.length_counter = np.zeros((self.num_envs,))
         self.total_ep_reward = np.zeros((self.num_envs,))
+        self.ep_success = np.zeros((self.num_envs,))
 
     def step(self, actions):
         """
@@ -61,6 +62,7 @@ class SequentialVectorEnv(gym.Env):
 
         for i, (action, env) in enumerate(zip(actions, self.envs)):
             obs, rew, done, info = env.step(action)
+            self.ep_success[i] = max(self.ep_success[i], info.get("success", 0.0))
 
             self.length_counter[i] += 1
             self.total_ep_reward[i] += rew
@@ -75,9 +77,10 @@ class SequentialVectorEnv(gym.Env):
 
             if done:
                 # return stats after max episode length in order to evaluate the exploration policy performance
-                ep_info["done"].append((self.length_counter[i], self.total_ep_reward[i]))
+                ep_info["done"].append((self.length_counter[i], self.total_ep_reward[i], float(self.ep_success[i])))
                 self.length_counter[i] = 0.
                 self.total_ep_reward[i] = 0.
+                self.ep_success[i] = 0.
 
             # Aggregate
             ep_info["info"].append(info)
@@ -88,6 +91,7 @@ class SequentialVectorEnv(gym.Env):
         return np.vstack(states), np.array(rewards), np.array(dones), ep_info
 
     def reset(self):
+        self.ep_success[:] = 0.
         return np.vstack([env.reset() for env in self.envs])
 
     def render(self, mode='human'):
