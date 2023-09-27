@@ -46,6 +46,7 @@ def get_args():
     parser.add_argument("--max-grad-norm", type=float, default=0.5)
     parser.add_argument("--eps-kl", type=float, default=0.5)
     parser.add_argument("--beta-lr", type=float, default=0.01)
+    parser.add_argument("--init-beta", type=float, default=1.)
     parser.add_argument("--fixup-batchsize", type=int, default=1024)
     parser.add_argument("--value-clip", type=int, default=1)
     parser.add_argument("--norm-adv", type=int, default=0)

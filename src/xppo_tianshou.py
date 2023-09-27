@@ -85,6 +85,7 @@ class XPPOPolicy(A2CPolicy):
         fixup_loop: bool = True,
         fixup_every_repeat: bool = True,
         target_coeff: float = 2.,
+        init_beta: float = 1.,
         kl_target_stat: str = "max",
         advantage_normalization: bool = True,
         recompute_advantage: bool = False,
@@ -97,7 +98,7 @@ class XPPOPolicy(A2CPolicy):
         self._norm_adv = advantage_normalization
         self._recompute_adv = recompute_advantage
         self._actor_critic: ActorCritic
-        self._beta = torch.nn.Parameter(torch.tensor(1.))
+        self._beta = torch.nn.Parameter(torch.tensor(init_beta))
         self._beta_optim = torch.optim.Adam(params=[self._beta], lr=beta_lr)
         self._fixup_batchsize = fixup_batchsize
         self._fixup_every_repeat = fixup_every_repeat
