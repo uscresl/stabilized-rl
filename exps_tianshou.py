@@ -106,6 +106,19 @@ MT50_ENV_NAMES = [
     "window-close",
 ]
 
+MT10_ENV_NAMES = [
+    'reach-v2',
+    'push-v2',
+    'pick-place-v2',
+    'door-open-v2',
+    'drawer-open-v2',
+    'drawer-close-v2',
+    'button-press-topdown-v2',
+    'peg-insert-side-v2',
+    'window-open-v2',
+    'window-close-v2',
+]
+
 
 def mujoco_xppo_tianshou(
     seed, env, group, priority=None, cores=2, add_to_path=None, total_steps=None, **kwargs
@@ -231,73 +244,161 @@ if HOST == BRAIN_HOSTNAME:
     #                 priority=(60, -seed),
     #                 cores=cores,
     #             )
-    for seed in seeds[:3]:
+    for seed in seeds:
+        if seed < 3:
+            base_priority = 70
+        else:
+            base_priority = 40
         for env_i, env in enumerate(MT50_ENV_NAMES):
             metaworld_xppo_tianshou(
                 seed=seed,
                 env=env,
                 group="xppo-tianshou-metaworld",
-                step_per_collect=10_000,
-                priority=(62, -seed, -env_i),
+                priority=(base_priority, -seed, -env_i),
             )
-            metaworld_xppo_tianshou(
-                seed=seed,
-                env=env,
-                group="xppo-tianshou-metaworld",
-                step_per_collect=50_000,
-                priority=(61, -seed, -env_i),
+        for env_i, env in enumerate(MT10_ENV_NAMES):
+            group = "xppo-tianshou-metaworld-transfer"
+            cmd(
+                "python",
+                "src/metaworld_xppo_tianshou.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--base-task-path", In(f"xppo_tianshou/env=pick-place_seed={seed}_steps-per-collect=10000_group=xppo-tianshou-metaworld/"),
+                "--wandb-entity", WANDB_ENTITY,
+                "--wandb-group", group,
+                "--log-dir",
+                Out(f"xppo_tianshou/env={env}_seed={seed}_group={group}/"),
+                warmup_time=3,
+                ram_gb=6,
+                priority=(base_priority - 5, -seed, -env_i),
+                cores=2,
             )
-            metaworld_xppo_tianshou(
-                seed=seed,
-                env=env,
-                group="xppo-tianshou-metaworld",
-                fixup_every_repeat=0,
-                priority=(60, -seed, -env_i),
+            back_group = "xppo-tianshou-metaworld-transfer-back"
+            cmd(
+                "python",
+                "src/metaworld_xppo_tianshou.py",
+                "--seed",
+                seed,
+                "--env",
+                "pick-place",
+                "--base-task-path", In(f"xppo_tianshou/env={env}_seed={seed}_group={group}/"),
+                "--wandb-entity", WANDB_ENTITY,
+                "--wandb-group", group,
+                "--log-dir",
+                Out(f"xppo_tianshou/env=pick-place_base_env={env}_seed={seed}_group={back_group}/"),
+                warmup_time=3,
+                ram_gb=6,
+                priority=(base_priority - 5, -seed, -env_i),
+                cores=2,
             )
-            metaworld_ppo_tianshou(
-                seed=seed,
-                env=env,
-                group="ppo-tianshou-metaworld",
-                priority=(61, -seed, -env_i),
-            )
-            metaworld_ppo_tianshou(
-                seed=seed,
-                env=env,
-                group="ppo-tianshou-metaworld",
-                step_per_collect=10_000,
-                priority=(60, -seed, -env_i),
-            )
+
+            # metaworld_xppo_tianshou(
+            #     seed=seed,
+            #     env=env,
+            #     group="xppo-tianshou-metaworld",
+            #     step_per_collect=50_000,
+            #     priority=(61, -seed, -env_i),
+            # )
+            # metaworld_xppo_tianshou(
+            #     seed=seed,
+            #     env=env,
+            #     group="xppo-tianshou-metaworld",
+            #     fixup_every_repeat=0,
+            #     priority=(60, -seed, -env_i),
+            # )
+            # metaworld_ppo_tianshou(
+            #     seed=seed,
+            #     env=env,
+            #     group="ppo-tianshou-metaworld",
+            #     priority=(61, -seed, -env_i),
+            # )
+            # metaworld_ppo_tianshou(
+            #     seed=seed,
+            #     env=env,
+            #     group="ppo-tianshou-metaworld",
+            #     step_per_collect=10_000,
+            #     priority=(60, -seed, -env_i),
+            # )
 
     for seed in seeds:
         for env_i, env in enumerate(mujoco_env_names_v3):
-            for eps_kl_args in [{"eps_kl": 0.2}, {}, {"eps_kl": 1.0}]:
-                for target_coeff in [2, 3, 5]:
-                    mujoco_xppo_tianshou(
-                        seed=seed,
-                        env=env,
-                        group="xppo-tianshou-mujoco",
-                        target_coeff=target_coeff,
-                        **eps_kl_args,
-                        priority=(50, -env_i, -seed, -target_coeff))
-                    mujoco_xppo_tianshou(
-                        seed=seed,
-                        env=env,
-                        group="xppo-tianshou-mujoco",
-                        fixup_every_repeat=0,
-                        target_coeff=target_coeff,
-                        **eps_kl_args,
-                        priority=(51, -env_i, -seed))
-                mujoco_xppo_tianshou(
-                    seed=seed,
-                    env=env,
-                    group="xppo-tianshou-mujoco",
-                    fixup_loop=0,
-                    **eps_kl_args,
-                    priority=(50, -env_i, -seed))
-                mujoco_xppo_tianshou(
-                    seed=seed,
-                    env=env,
-                    group="xppo-tianshou-mujoco",
-                    kl_target_stat="mean",
-                    **eps_kl_args,
-                    priority=(50, -env_i, -seed))
+            target_coeff = 3
+            mujoco_xppo_tianshou(
+                seed=seed,
+                env=env,
+                group="xppo-tianshou-mujoco",
+                target_coeff=target_coeff,
+                priority=(60, -env_i, -seed))
+            mujoco_xppo_tianshou(
+                seed=seed,
+                env=env,
+                group="xppo-tianshou-mujoco",
+                fixup_loop=0,
+                target_coeff=target_coeff,
+                priority=(60, -env_i, -seed))
+            mujoco_xppo_tianshou(
+                seed=seed,
+                env=env,
+                group="xppo-tianshou-mujoco",
+                fixup_every_repeat=0,
+                target_coeff=target_coeff,
+                priority=(60, -env_i, -seed))
+            mujoco_xppo_tianshou(
+                seed=seed,
+                env=env,
+                group="xppo-tianshou-mujoco",
+                kl_target_stat="mean",
+                target_coeff=target_coeff,
+                priority=(60, -env_i, -seed))
+            mujoco_xppo_tianshou(
+                seed=seed,
+                env=env,
+                group="xppo-tianshou-mujoco",
+                kl_target_stat="max",
+                target_coeff=1,
+                priority=(60, -env_i, -seed))
+
+            # Constant Beta runs here
+
+            mujoco_xppo_tianshou(
+                seed=seed,
+                env=env,
+                group="xppo-tianshou-mujoco",
+                kl_target_stat="mean",
+                fixup_loop=0,
+                target_coeff=target_coeff,
+                priority=(30, -env_i, -seed))
+
+            # for eps_kl_args in [{"eps_kl": 0.2}, {}, {"eps_kl": 1.0}]:
+            #     for target_coeff in [2, 3, 5]:
+            #         mujoco_xppo_tianshou(
+            #             seed=seed,
+            #             env=env,
+            #             group="xppo-tianshou-mujoco",
+            #             target_coeff=target_coeff,
+            #             **eps_kl_args,
+            #             priority=(50, -env_i, -seed, -target_coeff))
+            #         mujoco_xppo_tianshou(
+            #             seed=seed,
+            #             env=env,
+            #             group="xppo-tianshou-mujoco",
+            #             fixup_every_repeat=0,
+            #             target_coeff=target_coeff,
+            #             **eps_kl_args,
+            #             priority=(51, -env_i, -seed))
+            #     mujoco_xppo_tianshou(
+            #         seed=seed,
+            #         env=env,
+            #         group="xppo-tianshou-mujoco",
+            #         fixup_loop=0,
+            #         **eps_kl_args,
+            #         priority=(50, -env_i, -seed))
+            #     mujoco_xppo_tianshou(
+            #         seed=seed,
+            #         env=env,
+            #         group="xppo-tianshou-mujoco",
+            #         kl_target_stat="mean",
+            #         **eps_kl_args,
+            #         priority=(50, -env_i, -seed))

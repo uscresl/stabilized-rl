@@ -4,6 +4,7 @@ import argparse
 import datetime
 import os
 import pprint
+import copy
 
 import numpy as np
 import torch
@@ -32,7 +33,7 @@ def get_args():
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--epoch", type=int, default=400)
     parser.add_argument("--step-per-epoch", type=int, default=50_000)
-    parser.add_argument("--step-per-collect", type=int, default=50_000)
+    parser.add_argument("--step-per-collect", type=int, default=10_000)
     parser.add_argument("--repeat-per-collect", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=500)
     parser.add_argument("--training-num", type=int, default=10)
@@ -62,6 +63,7 @@ def get_args():
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
     parser.add_argument("--resume-path", type=str, default=None)
+    parser.add_argument("--base-task-path", type=str, default=None)
     parser.add_argument("--resume-id", type=str, default=None)
     parser.add_argument("--log-dir", type=str)
     parser.add_argument(
@@ -161,7 +163,7 @@ def test_xppo(args=get_args()):
         reward_normalization=args.rew_norm,
         action_scaling=True,
         action_bound_method=args.bound_action_method,
-        lr_scheduler=lr_scheduler,
+        lr_scheduler=copy.deepcopy(lr_scheduler),
         action_space=env.action_space,
         eps_kl=args.eps_kl,
         beta_lr=args.beta_lr,
@@ -173,6 +175,18 @@ def test_xppo(args=get_args()):
         advantage_normalization=args.norm_adv,
         recompute_advantage=args.recompute_adv,
     )
+
+    # load a previous policy
+    if args.base_task_path:
+        ckpt = torch.load(args.base_task_path, map_location=args.device)
+        policy.load_state_dict(ckpt["model"])
+        train_envs.set_obs_rms(ckpt["obs_rms"])
+        test_envs.set_obs_rms(ckpt["obs_rms"])
+        policy.optim = torch.optim.Adam(
+            list(actor.parameters()) + list(critic.parameters()), lr=args.lr
+        )
+        policy.lr_scheduler = lr_scheduler
+        print("Loaded agent from: ", args.base_task_path)
 
     # load a previous policy
     if args.resume_path:
