@@ -117,7 +117,11 @@ class XPPOPolicy(A2CPolicy):
         with torch.no_grad():
             result = self(batch)
             # Move batch dimension to start
-            batch.logits = result.logits.transpose(0, 1)
+            logits = result.logits
+            if logits.shape[0] > 2:
+                # Add tuple dimension if not present
+                logits = logits.unsqueeze(0)
+            batch.logits = logits.transpose(0, 1)
             batch.logp_old = result.dist.log_prob(batch.act)
         return batch
 
