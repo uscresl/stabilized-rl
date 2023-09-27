@@ -33,7 +33,7 @@ if HOST == BRAIN_HOSTNAME:
             # Someone is waiting (maybe us), don't start any more jobs
             GLOBAL_CONTEXT.max_concurrent_jobs = len(GLOBAL_CONTEXT.running) - 1
     #MAX_CONCURRENT_JOBS = 300
-    MAX_CONCURRENT_JOBS = 200
+    MAX_CONCURRENT_JOBS = 100
     # MAX_CONCURRENT_JOBS = 0
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS

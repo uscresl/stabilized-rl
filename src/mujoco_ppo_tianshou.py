@@ -13,50 +13,44 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.tensorboard import SummaryWriter
 
 from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
+from tianshou.policy import PPOPolicy
 from tianshou.trainer import onpolicy_trainer
 from tianshou.utils import TensorboardLogger, WandbLogger
 from tianshou.utils.net.common import Net
 from tianshou.utils.net.continuous import ActorProb, Critic
 
 from mujoco_env_tianshou import make_mujoco_env
-from xppo_tianshou import XPPOPolicy
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, default="HalfCheetah-v3")
+    parser.add_argument("--task", type=str, default="Ant-v3")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--buffer-size", type=int, default=8192)
+    parser.add_argument("--buffer-size", type=int, default=4096)
     parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[64, 64])
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--epoch", type=int, default=100)
     parser.add_argument("--step-per-epoch", type=int, default=30000)
-    parser.add_argument("--step-per-collect", type=int, default=8192)
+    parser.add_argument("--step-per-collect", type=int, default=2048)
     parser.add_argument("--repeat-per-collect", type=int, default=10)
-    parser.add_argument("--batch-size", type=int, default=512)
+    parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--training-num", type=int, default=64)
     parser.add_argument("--test-num", type=int, default=10)
     # ppo special
     parser.add_argument("--rew-norm", type=int, default=True)
-    parser.add_argument("--vf-coef", type=float, default=0.1)
+    parser.add_argument("--vf-coef", type=float, default=0.25)
     parser.add_argument("--ent-coef", type=float, default=0.0)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--bound-action-method", type=str, default="clip")
     parser.add_argument("--lr-decay", type=int, default=True)
     parser.add_argument("--max-grad-norm", type=float, default=0.5)
-    parser.add_argument("--eps-kl", type=float, default=0.5)
-    parser.add_argument("--beta-lr", type=float, default=0.01)
-    parser.add_argument("--init-beta", type=float, default=1.)
-    parser.add_argument("--fixup-batchsize", type=int, default=1024)
-    parser.add_argument("--value-clip", type=int, default=1)
+    parser.add_argument("--eps-clip", type=float, default=0.2)
+    parser.add_argument("--dual-clip", type=float, default=None)
+    parser.add_argument("--value-clip", type=int, default=0)
     parser.add_argument("--norm-adv", type=int, default=0)
-    parser.add_argument("--recompute-adv", type=int, default=0)
+    parser.add_argument("--recompute-adv", type=int, default=1)
     parser.add_argument("--log-dir", type=str)
     parser.add_argument("--render", type=float, default=0.)
-    parser.add_argument("--fixup-every-repeat", type=int, default=1)
-    parser.add_argument("--fixup-loop", type=int, default=1)
-    parser.add_argument("--kl-target-stat", type=str, default="max")
-    parser.add_argument("--target-coeff", type=float, default=2.)
     parser.add_argument(
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
@@ -80,9 +74,9 @@ def get_args():
     return parser.parse_args()
 
 
-def test_xppo(args=get_args()):
+def test_ppo(args=get_args()):
     env, train_envs, test_envs = make_mujoco_env(
-        args.env, args.seed, args.training_num, args.test_num, obs_norm=True
+        args.task, args.seed, args.training_num, args.test_num, obs_norm=True
     )
     args.state_shape = env.observation_space.shape or env.observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n
@@ -146,7 +140,7 @@ def test_xppo(args=get_args()):
     def dist(*logits):
         return Independent(Normal(*logits), 1)
 
-    policy = XPPOPolicy(
+    policy = PPOPolicy(
         actor,
         critic,
         optim,
@@ -161,14 +155,9 @@ def test_xppo(args=get_args()):
         action_bound_method=args.bound_action_method,
         lr_scheduler=lr_scheduler,
         action_space=env.action_space,
-        eps_kl=args.eps_kl,
-        beta_lr=args.beta_lr,
-        init_beta=args.init_beta,
-        fixup_batchsize=args.fixup_batchsize,
-        fixup_loop=args.fixup_loop,
-        fixup_every_repeat=args.fixup_every_repeat,
-        target_coeff=args.target_coeff,
+        eps_clip=args.eps_clip,
         value_clip=args.value_clip,
+        dual_clip=args.dual_clip,
         advantage_normalization=args.norm_adv,
         recompute_advantage=args.recompute_adv,
     )
@@ -209,7 +198,7 @@ def test_xppo(args=get_args()):
 
     def save_best_fn(policy):
         state = {"model": policy.state_dict(), "obs_rms": train_envs.get_obs_rms()}
-        torch.save(state, os.path.join(args.log_dir, "policy.pth"))
+        torch.save(state, os.path.join(log_path, "policy.pth"))
 
     if not args.watch:
         # trainer
@@ -238,4 +227,4 @@ def test_xppo(args=get_args()):
 
 
 if __name__ == "__main__":
-    test_xppo()
+    test_ppo()

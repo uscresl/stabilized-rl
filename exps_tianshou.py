@@ -33,7 +33,7 @@ if HOST == BRAIN_HOSTNAME:
             # Someone is waiting (maybe us), don't start any more jobs
             GLOBAL_CONTEXT.max_concurrent_jobs = len(GLOBAL_CONTEXT.running) - 1
     # MAX_CONCURRENT_JOBS = 300
-    MAX_CONCURRENT_JOBS = 0
+    MAX_CONCURRENT_JOBS = 100
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
 
@@ -147,6 +147,39 @@ def mujoco_xppo_tianshou(
         group,
         "--log-dir",
         Out(f"xppo_tianshou/env={env}_seed={seed}_{kwargs_path}_group={group}/"),
+        warmup_time=3,
+        ram_gb=6,
+        priority=priority,
+        cores=cores,
+    )
+
+def mujoco_ppo_tianshou(
+    seed, env, group, priority=None, cores=2, add_to_path=None, total_steps=None, **kwargs
+):
+    if total_steps is None:
+        total_steps = 10_000_000
+    if priority is None:
+        priority = (50, -seed)
+    if add_to_path is None:
+        add_to_path = [k for k, _ in kwargs.items()][:5]
+    kwargs_path = "_".join(
+        f"{k.replace('_', '-')}={kwargs.get(k)}" for k in add_to_path
+    )
+    return cmd(
+        "python",
+        "src/mujoco_ppo_tianshou.py",
+        "--seed",
+        seed,
+        "--env",
+        env,
+        "--epoch", EPOCHS,
+        "--step-per-epoch", math.ceil(total_steps / EPOCHS),
+        *[f"--{k.replace('_', '-')}={v}" for (k, v) in kwargs.items()],
+        "--wandb-entity", WANDB_ENTITY,
+        "--wandb-group",
+        group,
+        "--log-dir",
+        Out(f"ppo_tianshou/env={env}_seed={seed}_{kwargs_path}_group={group}/"),
         warmup_time=3,
         ram_gb=6,
         priority=priority,
@@ -314,16 +347,24 @@ if HOST == BRAIN_HOSTNAME:
             #     group="ppo-tianshou-metaworld",
             #     priority=(61, -seed, -env_i),
             # )
-            # metaworld_ppo_tianshou(
-            #     seed=seed,
-            #     env=env,
-            #     group="ppo-tianshou-metaworld",
-            #     step_per_collect=10_000,
-            #     priority=(60, -seed, -env_i),
-            # )
+            metaworld_ppo_tianshou(
+                seed=seed,
+                env=env,
+                group="ppo-tianshou-metaworld",
+                max_grad_norm=0.1,
+                step_per_collect=10_000,
+                priority=(50, -seed, -env_i),
+            )
 
     for seed in seeds:
         for env_i, env in enumerate(mujoco_env_names_v3):
+
+            mujoco_ppo_tianshou(
+                seed=seed,
+                env=env,
+                group="ppo-tianshou-mujoco",
+                priority=(70, -env_i, -seed))
+
             target_coeff = 3
             mujoco_xppo_tianshou(
                 seed=seed,
@@ -359,8 +400,13 @@ if HOST == BRAIN_HOSTNAME:
                 kl_target_stat="max",
                 target_coeff=1,
                 priority=(60, -env_i, -seed))
-
-            # Constant Beta runs here
+            mujoco_xppo_tianshou(
+                seed=seed,
+                env=env,
+                group="xppo-tianshou-mujoco",
+                init_beta=10,
+                beta_lr=0,
+                priority=(60, -env_i, -seed))
 
             mujoco_xppo_tianshou(
                 seed=seed,
