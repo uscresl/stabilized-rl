@@ -14,7 +14,7 @@ os.environ["WANDB_ENTITY"] = WANDB_ENTITY
 os.environ["WANDB_PROJECT"] = "stabilized-rl"
 
 if HOST == BRAIN_HOSTNAME:
-    MIN_CONCURRENT_JOBS = 1
+    MIN_CONCURRENT_JOBS = 50
     GLOBAL_CONTEXT.max_core_alloc = 600
     squeue_res = run(["squeue", "--all"], check=False, capture_output=True)
     if squeue_res.returncode == 0:
@@ -32,6 +32,8 @@ if HOST == BRAIN_HOSTNAME:
                 print(f"Running {len(GLOBAL_CONTEXT.running)} jobs")
             # Someone is waiting (maybe us), don't start any more jobs
             GLOBAL_CONTEXT.max_concurrent_jobs = len(GLOBAL_CONTEXT.running) - 1
+    if GLOBAL_CONTEXT.max_concurrent_jobs < MIN_CONCURRENT_JOBS:
+        GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
     #MAX_CONCURRENT_JOBS = 300
     MAX_CONCURRENT_JOBS = 100
     # MAX_CONCURRENT_JOBS = 0
@@ -47,6 +49,13 @@ mujoco_envs = [
     "InvertedDoublePendulum-v2",
     "Reacher-v2",
 ]
+
+mujoco_envs_remaining = [
+    "Swimmer-v2",
+    "InvertedDoublePendulum-v2",
+    "Reacher-v2",
+]
+
 seeds = list(range(10))
 
 mujoco_env_names_v3 = [
@@ -118,8 +127,9 @@ with open('trust-region-layers/configs/pg/mujoco_kl_config.json') as f:
 with open('trust-region-layers/configs/pg/mujoco_papi_config.json') as f:
     papi_conf = json.load(f)
 
-for seed in seeds[:3]:
-    for env in mujoco_env_names_v3:
+#for seed in seeds[:3]:
+for seed in seeds:
+    for env in mujoco_envs_remaining:
         conf_name = f"data_tmp/trust-region-layers_kl_seed={seed}_env={env}.json"
         out_dir = f"trust-region-layers_kl_seed={seed}_env={env}/"
         kl_config["n_envs"] = 1  # Should only affect sampling speed
@@ -130,7 +140,7 @@ for seed in seeds[:3]:
         with open(conf_name, 'w') as f:
             json.dump(kl_config, f, indent=2)
         cmd("python", "trust-region-layers/main.py", conf_name, extra_outputs=[Out(out_dir)],
-            cores=3, ram_gb=8, priority=(10, -seed))
+            cores=1, ram_gb=6, priority=(50, -seed))
 
         conf_name = f"data_tmp/trust-region-layers_papi_seed={seed}_env={env}.json"
         out_dir = f"trust-region-layers_papi_seed={seed}_env={env}/"
@@ -142,8 +152,9 @@ for seed in seeds[:3]:
         with open(conf_name, 'w') as f:
             json.dump(papi_conf, f, indent=2)
         cmd("python", "trust-region-layers/main.py", conf_name, extra_outputs=[Out(out_dir)],
-            cores=3, ram_gb=8, priority=(10, -seed))
+            cores=1, ram_gb=6, priority=(50, -seed))
 
+for seed in [2, 3]:
     for env_i, env in enumerate(MT50_ENV_NAMES):
         env = "metaworld-" + env
         mt_kl_conf = kl_config.copy()
@@ -161,7 +172,7 @@ for seed in seeds[:3]:
         mt_kl_conf["max_entropy_coeff"] = 0.01
         mt_kl_conf["max_episode_length"] = 500
         mt_kl_conf["epochs"] = 10
-        mt_kl_conf["train_steps"] = 400
+        mt_kl_conf["train_steps"] = 200
         mt_kl_conf["hidden_sizes_policy"] = [128, 128]
         mt_kl_conf["hidden_sizes_vf"] = [128, 128]
 

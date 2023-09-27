@@ -14,7 +14,7 @@ os.environ["WANDB_ENTITY"] = WANDB_ENTITY
 os.environ["WANDB_PROJECT"] = "stabilized-rl"
 
 if HOST == BRAIN_HOSTNAME:
-    MIN_CONCURRENT_JOBS = 10
+    MIN_CONCURRENT_JOBS = 30
     GLOBAL_CONTEXT.max_core_alloc = 600
     squeue_res = run(["squeue", "--all"], check=False, capture_output=True)
     if squeue_res.returncode == 0:
@@ -32,6 +32,8 @@ if HOST == BRAIN_HOSTNAME:
                 print(f"Running {len(GLOBAL_CONTEXT.running)} jobs")
             # Someone is waiting (maybe us), don't start any more jobs
             GLOBAL_CONTEXT.max_concurrent_jobs = len(GLOBAL_CONTEXT.running) - 1
+    if GLOBAL_CONTEXT.max_concurrent_jobs < MIN_CONCURRENT_JOBS:
+        GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
     # MAX_CONCURRENT_JOBS = 300
     MAX_CONCURRENT_JOBS = 100
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
@@ -282,6 +284,7 @@ if HOST == BRAIN_HOSTNAME:
             base_priority = 70
         else:
             base_priority = 40
+            continue
         for env_i, env in enumerate(MT50_ENV_NAMES):
             metaworld_xppo_tianshou(
                 seed=seed,
