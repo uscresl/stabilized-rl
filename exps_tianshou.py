@@ -287,6 +287,7 @@ if HOST == BRAIN_HOSTNAME:
                 seed=seed,
                 env=env,
                 group="xppo-tianshou-metaworld",
+                step_per_collect=10_000,
                 priority=(base_priority, -seed, -env_i),
             )
         for env_i, env in enumerate(MT10_ENV_NAMES):
@@ -298,7 +299,7 @@ if HOST == BRAIN_HOSTNAME:
                 seed,
                 "--env",
                 env,
-                "--base-task-path", In(f"xppo_tianshou/env=pick-place_seed={seed}_steps-per-collect=10000_group=xppo-tianshou-metaworld/"),
+                "--base-task-path", In(f"xppo_tianshou/env=pick-place_seed={seed}_step-per-collect=10000_group=xppo-tianshou-metaworld/policy.pth"),
                 "--wandb-entity", WANDB_ENTITY,
                 "--wandb-group", group,
                 "--log-dir",
@@ -316,7 +317,7 @@ if HOST == BRAIN_HOSTNAME:
                 seed,
                 "--env",
                 "pick-place",
-                "--base-task-path", In(f"xppo_tianshou/env={env}_seed={seed}_group={group}/"),
+                "--base-task-path", In(f"xppo_tianshou/env={env}_seed={seed}_group={group}/policy.pth"),
                 "--wandb-entity", WANDB_ENTITY,
                 "--wandb-group", group,
                 "--log-dir",
