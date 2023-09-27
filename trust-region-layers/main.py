@@ -95,7 +95,11 @@ def single_run(agent_config: str, agent_generator: callable, wandb_group: str):
         config=params,
     )
     if os.path.exists(params['out_dir']):
-        shutil.rmtree(params['out_dir'])
+        try:
+            shutil.rmtree(params['out_dir'])
+        except OSError:
+            # Probably transient NFS error?
+            pass
 
     agent = agent_generator(params)
     agent.learn()

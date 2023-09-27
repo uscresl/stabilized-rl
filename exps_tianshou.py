@@ -232,40 +232,40 @@ if HOST == BRAIN_HOSTNAME:
     #                 cores=cores,
     #             )
     for seed in seeds[:3]:
-        for env in MT50_ENV_NAMES:
+        for env_i, env in enumerate(MT50_ENV_NAMES):
             metaworld_xppo_tianshou(
                 seed=seed,
                 env=env,
                 group="xppo-tianshou-metaworld",
                 step_per_collect=10_000,
-                priority=(60, -seed),
+                priority=(62, -seed, -env_i),
             )
             metaworld_xppo_tianshou(
                 seed=seed,
                 env=env,
                 group="xppo-tianshou-metaworld",
                 step_per_collect=50_000,
-                priority=(61, -seed),
+                priority=(61, -seed, -env_i),
             )
             metaworld_xppo_tianshou(
                 seed=seed,
                 env=env,
                 group="xppo-tianshou-metaworld",
                 fixup_every_repeat=0,
-                priority=(60, -seed),
+                priority=(60, -seed, -env_i),
             )
             metaworld_ppo_tianshou(
                 seed=seed,
                 env=env,
                 group="ppo-tianshou-metaworld",
-                priority=(61, -seed),
+                priority=(61, -seed, -env_i),
             )
             metaworld_ppo_tianshou(
                 seed=seed,
                 env=env,
                 group="ppo-tianshou-metaworld",
                 step_per_collect=10_000,
-                priority=(60, -seed),
+                priority=(60, -seed, -env_i),
             )
 
     for seed in seeds:

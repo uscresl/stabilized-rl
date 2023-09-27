@@ -118,7 +118,7 @@ with open('trust-region-layers/configs/pg/mujoco_kl_config.json') as f:
 with open('trust-region-layers/configs/pg/mujoco_papi_config.json') as f:
     papi_conf = json.load(f)
 
-for seed in seeds:
+for seed in seeds[:3]:
     for env in mujoco_env_names_v3:
         conf_name = f"data_tmp/trust-region-layers_kl_seed={seed}_env={env}.json"
         out_dir = f"trust-region-layers_kl_seed={seed}_env={env}/"
@@ -144,7 +144,7 @@ for seed in seeds:
         cmd("python", "trust-region-layers/main.py", conf_name, extra_outputs=[Out(out_dir)],
             cores=3, ram_gb=8, priority=(10, -seed))
 
-    for env in MT50_ENV_NAMES:
+    for env_i, env in enumerate(MT50_ENV_NAMES):
         env = "metaworld-" + env
         mt_kl_conf = kl_config.copy()
         conf_name = f"data_tmp/trust-region-layers_kl_seed={seed}_env={env}_logged.json"
@@ -168,4 +168,4 @@ for seed in seeds:
         with open(conf_name, 'w') as f:
             json.dump(mt_kl_conf, f, indent=2)
         cmd("python", "trust-region-layers/main.py", conf_name, "--wandb-group=trust-region-layers-kl-metaworld-logged", extra_outputs=[Out(out_dir)],
-            cores=2, ram_gb=8, priority=(20, -seed))
+            cores=2, ram_gb=8, priority=(20, -seed, -env_i))
