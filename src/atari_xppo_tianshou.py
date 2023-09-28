@@ -11,7 +11,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.tensorboard import SummaryWriter
 
 from tianshou.data import Collector, VectorReplayBuffer
-from tianshou.policy import ICMPolicy, PPOPolicy
+from tianshou.policy import ICMPolicy
 from tianshou.trainer import onpolicy_trainer
 from tianshou.utils import TensorboardLogger, WandbLogger
 from tianshou.utils.net.common import ActorCritic
@@ -29,7 +29,7 @@ def get_args():
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--epoch", type=int, default=100)
     parser.add_argument("--step-per-epoch", type=int, default=100000)
-    parser.add_argument("--step-per-collect", type=int, default=1000)
+    parser.add_argument("--step-per-collect", type=int, default=10000)
     parser.add_argument("--repeat-per-collect", type=int, default=4)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--hidden-size", type=int, default=512)
@@ -42,12 +42,19 @@ def get_args():
     parser.add_argument("--lr-decay", type=int, default=True)
     parser.add_argument("--max-grad-norm", type=float, default=0.5)
     parser.add_argument("--eps-clip", type=float, default=0.1)
-    parser.add_argument("--dual-clip", type=float, default=None)
     parser.add_argument("--value-clip", type=int, default=1)
     parser.add_argument("--norm-adv", type=int, default=1)
     parser.add_argument("--recompute-adv", type=int, default=0)
     parser.add_argument("--log-dir", type=str)
     parser.add_argument("--render", type=float, default=0.)
+    parser.add_argument("--eps-kl", type=float, default=0.5)
+    parser.add_argument("--beta-lr", type=float, default=0.01)
+    parser.add_argument("--init-beta", type=float, default=1.)
+    parser.add_argument("--fixup-batchsize", type=int, default=256)
+    parser.add_argument("--fixup-every-repeat", type=int, default=1)
+    parser.add_argument("--fixup-loop", type=int, default=1)
+    parser.add_argument("--kl-target-stat", type=str, default="max")
+    parser.add_argument("--target-coeff", type=float, default=3.)
     parser.add_argument(
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
@@ -140,7 +147,7 @@ def test_ppo(args=get_args()):
     def dist(p):
         return torch.distributions.Categorical(logits=p)
 
-    policy = PPOPolicy(
+    policy = XPPOPolicy(
         actor,
         critic,
         optim,
@@ -156,9 +163,15 @@ def test_ppo(args=get_args()):
         action_space=env.action_space,
         eps_clip=args.eps_clip,
         value_clip=args.value_clip,
-        dual_clip=args.dual_clip,
         advantage_normalization=args.norm_adv,
         recompute_advantage=args.recompute_adv,
+        eps_kl=args.eps_kl,
+        beta_lr=args.beta_lr,
+        init_beta=args.init_beta,
+        fixup_batchsize=args.fixup_batchsize,
+        fixup_loop=args.fixup_loop,
+        fixup_every_repeat=args.fixup_every_repeat,
+        target_coeff=args.target_coeff,
     ).to(args.device)
     if args.icm_lr_scale > 0:
         feature_net = DQN(
@@ -265,23 +278,24 @@ def test_ppo(args=get_args()):
     # test train_collector and start filling replay buffer
     train_collector.collect(n_step=args.batch_size * args.training_num)
     # trainer
-    result = onpolicy_trainer(
-        policy,
-        train_collector,
-        test_collector,
-        args.epoch,
-        args.step_per_epoch,
-        args.repeat_per_collect,
-        args.test_num,
-        args.batch_size,
-        step_per_collect=args.step_per_collect,
-        stop_fn=stop_fn,
-        save_best_fn=save_best_fn,
-        logger=logger,
-        test_in_train=False,
-        resume_from_log=args.resume_id is not None,
-        save_checkpoint_fn=save_checkpoint_fn,
-    )
+    with torch.autograd.detect_anomaly():
+        result = onpolicy_trainer(
+            policy,
+            train_collector,
+            test_collector,
+            args.epoch,
+            args.step_per_epoch,
+            args.repeat_per_collect,
+            args.test_num,
+            args.batch_size,
+            step_per_collect=args.step_per_collect,
+            stop_fn=stop_fn,
+            save_best_fn=save_best_fn,
+            logger=logger,
+            test_in_train=False,
+            resume_from_log=args.resume_id is not None,
+            save_checkpoint_fn=save_checkpoint_fn,
+        )
 
     pprint.pprint(result)
     watch()

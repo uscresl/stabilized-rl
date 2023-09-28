@@ -88,6 +88,8 @@ class A2CPolicy(PGPolicy):
             for minibatch in batch.split(self._batch, shuffle=False, merge_last=True):
                 v_s.append(self.critic(minibatch.obs))
                 v_s_.append(self.critic(minibatch.obs_next))
+        assert not torch.isnan(torch.cat(v_s)).any()
+        assert not torch.isnan(torch.cat(v_s_)).any()
         batch.v_s = torch.cat(v_s, dim=0).flatten()  # old value
         v_s = batch.v_s.cpu().numpy()
         v_s_ = torch.cat(v_s_, dim=0).flatten().cpu().numpy()
@@ -107,12 +109,14 @@ class A2CPolicy(PGPolicy):
             gamma=self._gamma,
             gae_lambda=self._lambda
         )
+        assert not np.isnan(unnormalized_returns).any()
         if self._rew_norm:
             batch.returns = unnormalized_returns / \
                 np.sqrt(self.ret_rms.var + self._eps)
             self.ret_rms.update(unnormalized_returns)
         else:
             batch.returns = unnormalized_returns
+        assert not np.isnan(batch.returns).any()
         batch.returns = to_torch_as(batch.returns, batch.v_s)
         batch.adv = to_torch_as(advantages, batch.v_s)
         return batch

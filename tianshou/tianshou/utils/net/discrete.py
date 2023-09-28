@@ -64,10 +64,18 @@ class Actor(nn.Module):
         info: Dict[str, Any] = {},
     ) -> Tuple[torch.Tensor, Any]:
         r"""Mapping: s -> Q(s, \*)."""
+        if isinstance(obs, torch.Tensor):
+            assert not torch.isnan(obs).any()
+        else:
+            assert not np.isnan(obs).any()
         logits, hidden = self.preprocess(obs, state)
+        assert not torch.isnan(logits).any()
         logits = self.last(logits)
+        assert not torch.isnan(logits).any()
         if self.softmax_output:
-            logits = F.softmax(logits, dim=-1)
+            logits_sm = F.softmax(logits, dim=-1)
+            assert not torch.isnan(logits_sm).any()
+            logits = logits_sm
         return logits, hidden
 
 

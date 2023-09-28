@@ -84,7 +84,7 @@ class XPPOPolicy(A2CPolicy):
         value_clip: bool = False,
         fixup_loop: bool = True,
         fixup_every_repeat: bool = True,
-        target_coeff: float = 2.,
+        target_coeff: float = 3.,
         init_beta: float = 1.,
         kl_target_stat: str = "max",
         advantage_normalization: bool = True,

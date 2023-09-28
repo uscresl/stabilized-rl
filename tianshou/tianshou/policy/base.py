@@ -342,6 +342,10 @@ class BasePolicy(ABC, nn.Module):
         end_flag[np.isin(indices, buffer.unfinished_index())] = True
         advantage = _gae_return(v_s, v_s_, rew, end_flag, gamma, gae_lambda)
         returns = advantage + v_s
+        assert not np.isnan(v_s).any()
+        assert not np.isnan(v_s_).any()
+        assert not np.isnan(advantage).any()
+        assert not np.isnan(returns).any()
         # normalization varies from each policy, so we don't do it here
         return returns, advantage
 
