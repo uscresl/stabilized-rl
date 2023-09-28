@@ -12,9 +12,10 @@ WANDB_ENTITY = "resl-mixppo"
 BRAIN_HOSTNAME = "brain.usc.edu"
 os.environ["WANDB_ENTITY"] = WANDB_ENTITY
 os.environ["WANDB_PROJECT"] = "stabilized-rl"
+os.environ["WANDB__SERVICE_WAIT"] = "300"
 
 if HOST == BRAIN_HOSTNAME:
-    MIN_CONCURRENT_JOBS = 50
+    MIN_CONCURRENT_JOBS = 30
     GLOBAL_CONTEXT.max_core_alloc = 600
     squeue_res = run(["squeue", "--all"], check=False, capture_output=True)
     if squeue_res.returncode == 0:
@@ -35,7 +36,7 @@ if HOST == BRAIN_HOSTNAME:
     if GLOBAL_CONTEXT.max_concurrent_jobs < MIN_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
     #MAX_CONCURRENT_JOBS = 300
-    MAX_CONCURRENT_JOBS = 100
+    MAX_CONCURRENT_JOBS = 60
     # MAX_CONCURRENT_JOBS = 0
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
@@ -139,8 +140,8 @@ for seed in seeds:
         kl_config["exp_name"] = f'seed_{seed}_env_{env}_{datetime.now().strftime("%Y%m%d_%H%M%S_%f")}'
         with open(conf_name, 'w') as f:
             json.dump(kl_config, f, indent=2)
-        cmd("python", "trust-region-layers/main.py", conf_name, extra_outputs=[Out(out_dir)],
-            cores=1, ram_gb=6, priority=(50, -seed))
+        cmd("python", "trust-region-layers/main.py", conf_name, "--wandb-group=trust-region-layers-papi", extra_outputs=[Out(out_dir)],
+            cores=1, ram_gb=6, priority=(51, -seed))
 
         conf_name = f"data_tmp/trust-region-layers_papi_seed={seed}_env={env}.json"
         out_dir = f"trust-region-layers_papi_seed={seed}_env={env}/"
@@ -151,10 +152,10 @@ for seed in seeds:
         papi_conf["exp_name"] = f'seed_{seed}_env_{env}_{datetime.now().strftime("%Y%m%d_%H%M%S_%f")}'
         with open(conf_name, 'w') as f:
             json.dump(papi_conf, f, indent=2)
-        cmd("python", "trust-region-layers/main.py", conf_name, extra_outputs=[Out(out_dir)],
-            cores=1, ram_gb=6, priority=(50, -seed))
+        cmd("python", "trust-region-layers/main.py", conf_name, "--wandb-group=trust-region-layers-papi", extra_outputs=[Out(out_dir)],
+            cores=1, ram_gb=6, priority=(10, -seed))
 
-for seed in [2, 3]:
+for seed in [2, 3, 4]:
     for env_i, env in enumerate(MT50_ENV_NAMES):
         env = "metaworld-" + env
         mt_kl_conf = kl_config.copy()

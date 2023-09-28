@@ -23,7 +23,7 @@ from mujoco_env_tianshou import make_mujoco_env
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", type=str, default="Ant-v3")
+    parser.add_argument("--env", type=str, default="Ant-v3")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--buffer-size", type=int, default=4096)
     parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[64, 64])
@@ -76,7 +76,7 @@ def get_args():
 
 def test_ppo(args=get_args()):
     env, train_envs, test_envs = make_mujoco_env(
-        args.task, args.seed, args.training_num, args.test_num, obs_norm=True
+        args.env, args.seed, args.training_num, args.test_num, obs_norm=True
     )
     args.state_shape = env.observation_space.shape or env.observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n
@@ -198,7 +198,7 @@ def test_ppo(args=get_args()):
 
     def save_best_fn(policy):
         state = {"model": policy.state_dict(), "obs_rms": train_envs.get_obs_rms()}
-        torch.save(state, os.path.join(log_path, "policy.pth"))
+        torch.save(state, os.path.join(args.log_dir, "policy.pth"))
 
     if not args.watch:
         # trainer
