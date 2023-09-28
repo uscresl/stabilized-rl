@@ -21,6 +21,8 @@ from glob import glob
 from multiprocessing import JoinableQueue, Process
 import os
 import shutil
+from datetime import datetime
+import random
 
 import wandb
 
@@ -59,6 +61,7 @@ def multithreaded_run(agent_configs: str, agent_generator: callable, num_threads
 def single_run(agent_config: str, agent_generator: callable, wandb_group: str):
     params = json.load(open(agent_config))
 
+    wandb_unique_id = f'{datetime.now().strftime("%Y%m%d_%H%M%S_%f")}_{random.randrange(1000)}'
     # generate name
     params.update({
         "exp_name": f"{params['proj_type']}-"
@@ -86,20 +89,23 @@ def single_run(agent_config: str, agent_generator: callable, wandb_group: str):
                     f"steps{params['train_steps']}-"
                     f"epochs{params['epochs']}-"
                     f"seed{params['seed']}"
+                    f"-{wandb_unique_id}"
     })
 
-    wandb.init(
-        group=wandb_group,
-        sync_tensorboard=True,
-        resume="allow",
-        config=params,
-    )
     if os.path.exists(params['out_dir']):
         try:
             shutil.rmtree(params['out_dir'])
         except OSError:
             # Probably transient NFS error?
             pass
+
+    wandb.init(
+        group=wandb_group,
+        id=wandb_unique_id,
+        sync_tensorboard=True,
+        resume="allow",
+        config=params,
+    )
 
     agent = agent_generator(params)
     agent.learn()

@@ -527,7 +527,7 @@ class PolicyGradient(AbstractAlgorithm):
             rewards_test.append(rewards_dict['evaluation']['mean'])
             # We've succeeded for 100 episodes in a row.
             # Stop the job
-            if rewards_dict['exploration'].get('success_rate', 0.0) == 1.0:
+            if epoch >= 10 and rewards_dict['exploration'].get('success_rate', 0.0) == 1.0:
                 break
 
         self.store["final_results"].append_row({

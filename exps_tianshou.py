@@ -12,6 +12,7 @@ WANDB_ENTITY = "resl-mixppo"
 BRAIN_HOSTNAME = "brain.usc.edu"
 os.environ["WANDB_ENTITY"] = WANDB_ENTITY
 os.environ["WANDB_PROJECT"] = "stabilized-rl"
+os.environ["WANDB__SERVICE_WAIT"] = "300"
 
 if HOST == BRAIN_HOSTNAME:
     MIN_CONCURRENT_JOBS = 30
@@ -109,16 +110,16 @@ MT50_ENV_NAMES = [
 ]
 
 MT10_ENV_NAMES = [
-    "reach-v2",
-    "push-v2",
-    "pick-place-v2",
-    "door-open-v2",
-    "drawer-open-v2",
-    "drawer-close-v2",
-    "button-press-topdown-v2",
-    "peg-insert-side-v2",
-    "window-open-v2",
-    "window-close-v2",
+    'reach',
+    'push',
+    'pick-place',
+    'door-open',
+    'drawer-open',
+    'drawer-close',
+    'button-press-topdown',
+    'peg-insert-side',
+    'window-open',
+    'window-close',
 ]
 
 
@@ -337,6 +338,14 @@ if HOST == BRAIN_HOSTNAME:
                 step_per_collect=10_000,
                 priority=(base_priority, -seed, -env_i),
             )
+            metaworld_ppo_tianshou(
+                seed=seed,
+                env=env,
+                group="ppo-tianshou-metaworld",
+                max_grad_norm=0.1,
+                step_per_collect=10_000,
+                priority=(base_priority, -seed, -env_i),
+            )
         for env_i, env in enumerate(MT10_ENV_NAMES):
             group = "xppo-tianshou-metaworld-transfer"
             cmd(
@@ -405,13 +414,48 @@ if HOST == BRAIN_HOSTNAME:
             #     group="ppo-tianshou-metaworld",
             #     priority=(61, -seed, -env_i),
             # )
-            metaworld_ppo_tianshou(
-                seed=seed,
-                env=env,
-                group="ppo-tianshou-metaworld",
-                max_grad_norm=0.1,
-                step_per_collect=10_000,
-                priority=(50, -seed, -env_i),
+        for env_i, env in enumerate(MT10_ENV_NAMES):
+            group = "ppo-tianshou-metaworld-transfer"
+            hidden_sizes = [128,128]
+            if seed in [0, 1, 2]:
+                hidden_sizes = [64,64]
+            # print("data/" + f"ppo_tianshou/env=pick-place_seed={seed}_step-per-collect=10000_group=ppo-tianshou-metaworld/policy.pth")
+            cmd(
+                "python",
+                "src/metaworld_ppo_tianshou.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--hidden-sizes", *hidden_sizes,
+                "--base-task-path", In(f"ppo_tianshou/env=pick-place_seed={seed}_step-per-collect=10000_group=ppo-tianshou-metaworld/policy.pth"),
+                "--wandb-entity", WANDB_ENTITY,
+                "--wandb-group", group,
+                "--log-dir",
+                Out(f"ppo_tianshou/env={env}_seed={seed}_group={group}/"),
+                warmup_time=3,
+                ram_gb=6,
+                priority=(base_priority + 5, -seed, -env_i),
+                cores=2,
+            )
+            back_group = "ppo-tianshou-metaworld-transfer-back"
+            cmd(
+                "python",
+                "src/metaworld_ppo_tianshou.py",
+                "--seed",
+                seed,
+                "--env",
+                "pick-place",
+                "--hidden-sizes", *hidden_sizes,
+                "--base-task-path", In(f"ppo_tianshou/env={env}_seed={seed}_group={group}/policy.pth"),
+                "--wandb-entity", WANDB_ENTITY,
+                "--wandb-group", group,
+                "--log-dir",
+                Out(f"ppo_tianshou/env=pick-place_base_env={env}_seed={seed}_group={back_group}/"),
+                warmup_time=3,
+                ram_gb=6,
+                priority=(base_priority + 5, -seed, -env_i),
+                cores=2,
             )
 
     for seed in seeds:
@@ -471,7 +515,6 @@ if HOST == BRAIN_HOSTNAME:
                 beta_lr=0,
                 priority=(60, -env_i, -seed),
             )
-
             mujoco_xppo_tianshou(
                 seed=seed,
                 env=env,
