@@ -195,6 +195,16 @@ def test_xppo(args=get_args()):
         policy.optim = torch.optim.Adam(
             list(actor.parameters()) + list(critic.parameters()), lr=args.lr
         )
+        lr_scheduler = None
+        if args.lr_decay:
+            # decay learning rate to 0 linearly
+            max_update_num = np.ceil(
+                args.step_per_epoch / args.step_per_collect
+            ) * args.epoch
+
+            lr_scheduler = LambdaLR(
+                policy.optim, lr_lambda=lambda epoch: 1 - epoch / max_update_num
+            )
         policy.lr_scheduler = lr_scheduler
         print("Loaded agent from: ", args.base_task_path)
 

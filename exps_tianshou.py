@@ -36,7 +36,7 @@ if HOST == BRAIN_HOSTNAME:
     if GLOBAL_CONTEXT.max_concurrent_jobs < MIN_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
     # MAX_CONCURRENT_JOBS = 300
-    MAX_CONCURRENT_JOBS = 100
+    MAX_CONCURRENT_JOBS = 200
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
 
@@ -50,6 +50,7 @@ mujoco_env_names_v3 = [
     "Hopper-v3",
     "Swimmer-v3",
     "InvertedPendulum-v2",
+    "InvertedDoublePendulum-v2",
     "Reacher-v2",
 ]
 
@@ -355,14 +356,10 @@ if HOST == BRAIN_HOSTNAME:
                 seed,
                 "--env",
                 env,
-                "--base-task-path",
-                In(
-                    f"xppo_tianshou/env=pick-place_seed={seed}_step-per-collect=10000_group=xppo-tianshou-metaworld/policy.pth"
-                ),
-                "--wandb-entity",
-                WANDB_ENTITY,
-                "--wandb-group",
-                group,
+                "--epoch", 100,
+                "--base-task-path", In(f"xppo_tianshou/env=pick-place_seed={seed}_step-per-collect=10000_group=xppo-tianshou-metaworld/policy.pth"),
+                "--wandb-entity", WANDB_ENTITY,
+                "--wandb-group", group,
                 "--log-dir",
                 Out(f"xppo_tianshou/env={env}_seed={seed}_group={group}/"),
                 warmup_time=3,
@@ -378,19 +375,17 @@ if HOST == BRAIN_HOSTNAME:
                 seed,
                 "--env",
                 "pick-place",
-                "--base-task-path",
-                In(f"xppo_tianshou/env={env}_seed={seed}_group={group}/policy.pth"),
-                "--wandb-entity",
-                WANDB_ENTITY,
-                "--wandb-group",
-                group,
+                "--epoch", 100,
+                "--base-task-path", In(f"xppo_tianshou/env={env}_seed={seed}_group={group}/policy.pth"),
+                "--wandb-entity", WANDB_ENTITY,
+                "--wandb-group", group,
                 "--log-dir",
                 Out(
                     f"xppo_tianshou/env=pick-place_base_env={env}_seed={seed}_group={back_group}/"
                 ),
                 warmup_time=3,
                 ram_gb=6,
-                priority=(base_priority - 5, -seed, -env_i),
+                priority=(base_priority + 10, -seed, -env_i),
                 cores=2,
             )
 
@@ -427,6 +422,7 @@ if HOST == BRAIN_HOSTNAME:
                 seed,
                 "--env",
                 env,
+                "--epoch", 100,
                 "--hidden-sizes", *hidden_sizes,
                 "--base-task-path", In(f"ppo_tianshou/env=pick-place_seed={seed}_step-per-collect=10000_group=ppo-tianshou-metaworld/policy.pth"),
                 "--wandb-entity", WANDB_ENTITY,
@@ -446,6 +442,7 @@ if HOST == BRAIN_HOSTNAME:
                 seed,
                 "--env",
                 "pick-place",
+                "--epoch", 100,
                 "--hidden-sizes", *hidden_sizes,
                 "--base-task-path", In(f"ppo_tianshou/env={env}_seed={seed}_group={group}/policy.pth"),
                 "--wandb-entity", WANDB_ENTITY,
@@ -454,7 +451,7 @@ if HOST == BRAIN_HOSTNAME:
                 Out(f"ppo_tianshou/env=pick-place_base_env={env}_seed={seed}_group={back_group}/"),
                 warmup_time=3,
                 ram_gb=6,
-                priority=(base_priority + 5, -seed, -env_i),
+                priority=(base_priority + 10, -seed, -env_i),
                 cores=2,
             )
 
@@ -464,8 +461,7 @@ if HOST == BRAIN_HOSTNAME:
                 seed=seed,
                 env=env,
                 group="ppo-tianshou-mujoco",
-                priority=(70, -env_i, -seed),
-            )
+                priority=(100, -env_i, -seed))
 
             target_coeff = 3
             mujoco_xppo_tianshou(
@@ -473,8 +469,14 @@ if HOST == BRAIN_HOSTNAME:
                 env=env,
                 group="xppo-tianshou-mujoco",
                 target_coeff=target_coeff,
-                priority=(60, -env_i, -seed),
-            )
+                priority=(100, -env_i, -seed))
+            mujoco_xppo_tianshou(
+                seed=seed,
+                env=env,
+                group="xppo-tianshou-mujocob-50k",
+                target_coeff=target_coeff,
+                step_per_collect=50_000,
+                priority=(60, -env_i, -seed))
             mujoco_xppo_tianshou(
                 seed=seed,
                 env=env,
@@ -524,7 +526,6 @@ if HOST == BRAIN_HOSTNAME:
                 target_coeff=target_coeff,
                 priority=(30, -env_i, -seed),
             )
-
             # for eps_kl_args in [{"eps_kl": 0.2}, {}, {"eps_kl": 1.0}]:
             #     for target_coeff in [2, 3, 5]:
             #         mujoco_xppo_tianshou(

@@ -36,7 +36,7 @@ if HOST == BRAIN_HOSTNAME:
     if GLOBAL_CONTEXT.max_concurrent_jobs < MIN_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
     #MAX_CONCURRENT_JOBS = 300
-    MAX_CONCURRENT_JOBS = 60
+    MAX_CONCURRENT_JOBS = 0
     # MAX_CONCURRENT_JOBS = 0
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
@@ -47,12 +47,14 @@ mujoco_envs = [
     "Hopper-v2",
     "Walker2d-v2",
     "Swimmer-v3",
+    "InvertedPendulum-v2",
     "InvertedDoublePendulum-v2",
     "Reacher-v2",
 ]
 
 mujoco_envs_remaining = [
     "Swimmer-v2",
+    "InvertedPendulum-v2",
     "InvertedDoublePendulum-v2",
     "Reacher-v2",
 ]
@@ -65,6 +67,7 @@ mujoco_env_names_v3 = [
     "Hopper-v3",
     "Swimmer-v3",
     "InvertedPendulum-v2",
+    "InvertedDoublePendulum-v2",
     "Reacher-v2",
 ]
 
