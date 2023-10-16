@@ -77,6 +77,7 @@ class XPPOPolicy(A2CPolicy):
         optim: torch.optim.Optimizer,
         dist_fn: Type[torch.distributions.Distribution],
         *,
+        log_dir: str,
         fixup_batchsize: int = 1024,
         beta_lr: float = 0.01,
         eps_kl: float = 0.2,
@@ -84,7 +85,7 @@ class XPPOPolicy(A2CPolicy):
         value_clip: bool = False,
         fixup_loop: bool = True,
         fixup_every_repeat: bool = True,
-        target_coeff: float = 2.,
+        target_coeff: float = 3.,
         init_beta: float = 1.,
         kl_target_stat: str = "max",
         advantage_normalization: bool = True,
@@ -105,6 +106,22 @@ class XPPOPolicy(A2CPolicy):
         self._kl_target_stat = kl_target_stat
         self._fixup_loop = fixup_loop
         self._target_coeff = target_coeff
+        self._epoch = 0
+        self._log_dir = log_dir
+        self._full_max_kl_divs = [0.]
+        self._max_kl_divs = [0.]
+        self._betas = [self._beta.item()]
+        self._primary_phase_grad_steps = []
+        self._fixup_phase_grad_steps = []
+
+    def reset_plot(self):
+        global MAX_GRAD_STEP
+        MAX_GRAD_STEP = 100
+        self._full_max_kl_divs = [0.]
+        self._max_kl_divs = [0.]
+        self._betas = [self._beta.item()]
+        self._primary_phase_grad_steps = []
+        self._fixup_phase_grad_steps = []
 
     def process_fn(
         self, batch: Batch, buffer: ReplayBuffer, indices: np.ndarray
@@ -149,10 +166,14 @@ class XPPOPolicy(A2CPolicy):
         self, batch: Batch, batch_size: int, repeat: int, **kwargs: Any
     ) -> Dict[str, List[float]]:
         losses, pg_losses, vf_losses, ent_losses, beta_losses, kl_losses = [], [], [], [], [], []
+        if self._epoch % 4 == 0:
+            self.reset_plot()
         fixup_grad_steps = 0
         for step in range(repeat):
             if self._recompute_adv and step > 0:
                 batch = self._compute_returns(batch, self._buffer, self._indices)
+            primary_steps = 0
+            fixup_steps = 0
             for minibatch in batch.split(batch_size, merge_last=True):
                 # calculate loss for actor
                 dist = self(minibatch).dist
@@ -194,6 +215,15 @@ class XPPOPolicy(A2CPolicy):
                 kl_losses.append(kl_loss.item())
                 losses.append(loss.item())
 
+                with torch.no_grad():
+                    old_dist_full = self.dist_fn(*batch.logits.transpose(0, 1))
+                    dist_full = self(batch).dist
+                    kl_div_full = kl_divergence(old_dist_full, dist_full)
+                    self._full_max_kl_divs.append(kl_div_full.max().item())
+                    self._max_kl_divs.append(kl_div.max().item())
+                    self._betas.append(self._beta.item())
+                    primary_steps += 1
+
                 beta_losses.append(self._optimize_beta(kl_div))
 
             if self._fixup_loop and (self._fixup_every_repeat or step + 1 == repeat):
@@ -218,8 +248,29 @@ class XPPOPolicy(A2CPolicy):
                             self.optim.step()
 
                             beta_losses.append(self._optimize_beta(kl_div))
+
+                            with torch.no_grad():
+                                old_dist_full = self.dist_fn(*batch.logits.transpose(0, 1))
+                                dist_full = self(batch).dist
+                                kl_div_full = kl_divergence(old_dist_full, dist_full)
+                                self._full_max_kl_divs.append(kl_div_full.max().item())
+                                self._max_kl_divs.append(kl_div.max().item())
+                                self._betas.append(self._beta.item())
+                                fixup_steps += 1
+
                     if constraint_satisfied:
                         break
+            self._primary_phase_grad_steps.append(primary_steps)
+            self._fixup_phase_grad_steps.append(fixup_steps)
+        gradient_steps_plot(
+            full_max_kl_divs=self._full_max_kl_divs,
+            betas=self._betas,
+            primary_phase_grad_steps=self._primary_phase_grad_steps,
+            fixup_phase_grad_steps=self._fixup_phase_grad_steps,
+            target=self._eps_kl / self._target_coeff,
+            boundary=self._eps_kl,
+            filename=f"{self._log_dir}/grad_steps_plot_{self._epoch}.pdf")
+        self._epoch += 1
 
         return {
             "loss": losses,
@@ -231,3 +282,54 @@ class XPPOPolicy(A2CPolicy):
             "fixup_grad_steps": fixup_grad_steps,
             "beta": self._beta.item(),
         }
+
+MAX_GRAD_STEP = 100
+def gradient_steps_plot(full_max_kl_divs, betas, primary_phase_grad_steps, fixup_phase_grad_steps, target, boundary, filename):
+    global MAX_GRAD_STEP
+    import matplotlib
+
+    matplotlib.rcParams.update(
+        {
+            "figure.dpi": 150,
+            "font.size": 14,
+        }
+    )
+    matplotlib.rcParams["pdf.fonttype"] = 42
+    matplotlib.rcParams["ps.fonttype"] = 42
+
+    import matplotlib.pyplot as plt
+
+    plt.clf()
+    fig, ax1 = plt.subplots()
+    color = "tab:red"
+    ax1.set_xlabel("Gradient Steps")
+    ax1.set_ylabel("Max KL Divergence", color=color)
+    ax1.plot(full_max_kl_divs, color=color)
+    # ax1.plot(debug_data['kl_divs'], color='orange')
+    ax1.tick_params(axis="y", labelcolor=color)
+    # ax1.set_aspect(2)
+    ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+    color = "tab:blue"
+    ax2.set_ylabel(r"$\beta$", color=color)  # we already handled the x-label with ax1
+    ax2.plot(betas, color=color)
+    ax2.tick_params(axis="y", labelcolor=color)
+
+    grad_step = 0
+    for epoch in range(len(primary_phase_grad_steps)):
+        grad_step += primary_phase_grad_steps[epoch]
+        ax1.axvspan(
+            grad_step,
+            grad_step + fixup_phase_grad_steps[epoch],
+            alpha=0.25,
+            color="green",
+        )
+        grad_step += fixup_phase_grad_steps[epoch]
+    MAX_GRAD_STEP = max(grad_step, MAX_GRAD_STEP)
+    # ax1.hlines(target, xmin=0, xmax=MAX_GRAD_STEP, color="gray", linestyles="dotted")
+    ax1.hlines(boundary, xmin=0, xmax=MAX_GRAD_STEP, color="black", linestyles="dashed")
+    # ax1.vlines(len(debug_data['full_max_kl_divs']) - debug_data['second_loop_minibatches'][0], ymin=0, ymax=0.2, color="green")
+    # ax1.set_aspect(1.5)
+    # ax2.set_aspect(1.5)
+    fig.tight_layout()  # otherwise the right y-label is slightly clipped
+    plt.savefig(filename)

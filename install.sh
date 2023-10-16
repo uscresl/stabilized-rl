@@ -1,9 +1,9 @@
-#!/bin/bash -xe
+#!/bin/bash -x
 
-if [ ! -d venv_install ]; then
-  python3 -m venv venv_install
-fi
-source venv_install/bin/activate
+#if [ ! -d venv_install ]; then
+#  python3 -m venv venv_install
+#fi
+#source venv_install/bin/activate
 
 echo "Using python: $(which python)"
 pip install setuptools

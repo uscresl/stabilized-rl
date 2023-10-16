@@ -56,7 +56,7 @@ def get_args():
     parser.add_argument("--fixup-every-repeat", type=int, default=1)
     parser.add_argument("--fixup-loop", type=int, default=1)
     parser.add_argument("--kl-target-stat", type=str, default="max")
-    parser.add_argument("--target-coeff", type=float, default=2.)
+    parser.add_argument("--target-coeff", type=float, default=3.)
     parser.add_argument(
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
@@ -171,6 +171,7 @@ def test_xppo(args=get_args()):
         value_clip=args.value_clip,
         advantage_normalization=args.norm_adv,
         recompute_advantage=args.recompute_adv,
+        log_dir=args.log_dir,
     )
 
     # load a previous policy
