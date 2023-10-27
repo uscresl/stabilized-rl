@@ -20,7 +20,7 @@ if HOST == BRAIN_HOSTNAME:
     if squeue_res.returncode == 0:
         out = squeue_res.stdout.decode()
         found_waiting_normal_job = False
-        for line in out.split('\n'):
+        for line in out.split("\n"):
             if "(Priority)" in line or "(Resources)" in line:
                 if "slurm-lon" not in line:
                     found_waiting_normal_job = True
@@ -109,21 +109,28 @@ MT50_ENV_NAMES = [
 ]
 
 MT10_ENV_NAMES = [
-    'reach-v2',
-    'push-v2',
-    'pick-place-v2',
-    'door-open-v2',
-    'drawer-open-v2',
-    'drawer-close-v2',
-    'button-press-topdown-v2',
-    'peg-insert-side-v2',
-    'window-open-v2',
-    'window-close-v2',
+    "reach-v2",
+    "push-v2",
+    "pick-place-v2",
+    "door-open-v2",
+    "drawer-open-v2",
+    "drawer-close-v2",
+    "button-press-topdown-v2",
+    "peg-insert-side-v2",
+    "window-open-v2",
+    "window-close-v2",
 ]
 
 
 def mujoco_xppo_tianshou(
-    seed, env, group, priority=None, cores=2, add_to_path=None, total_steps=None, **kwargs
+    seed,
+    env,
+    group,
+    priority=None,
+    cores=2,
+    add_to_path=None,
+    total_steps=None,
+    **kwargs,
 ):
     if total_steps is None:
         total_steps = 10_000_000
@@ -141,10 +148,13 @@ def mujoco_xppo_tianshou(
         seed,
         "--env",
         env,
-        "--epoch", EPOCHS,
-        "--step-per-epoch", math.ceil(total_steps / EPOCHS),
+        "--epoch",
+        EPOCHS,
+        "--step-per-epoch",
+        math.ceil(total_steps / EPOCHS),
         *[f"--{k.replace('_', '-')}={v}" for (k, v) in kwargs.items()],
-        "--wandb-entity", WANDB_ENTITY,
+        "--wandb-entity",
+        WANDB_ENTITY,
         "--wandb-group",
         group,
         "--log-dir",
@@ -155,8 +165,16 @@ def mujoco_xppo_tianshou(
         cores=cores,
     )
 
+
 def mujoco_ppo_tianshou(
-    seed, env, group, priority=None, cores=2, add_to_path=None, total_steps=None, **kwargs
+    seed,
+    env,
+    group,
+    priority=None,
+    cores=2,
+    add_to_path=None,
+    total_steps=None,
+    **kwargs,
 ):
     if total_steps is None:
         total_steps = 10_000_000
@@ -174,10 +192,13 @@ def mujoco_ppo_tianshou(
         seed,
         "--env",
         env,
-        "--epoch", EPOCHS,
-        "--step-per-epoch", math.ceil(total_steps / EPOCHS),
+        "--epoch",
+        EPOCHS,
+        "--step-per-epoch",
+        math.ceil(total_steps / EPOCHS),
         *[f"--{k.replace('_', '-')}={v}" for (k, v) in kwargs.items()],
-        "--wandb-entity", WANDB_ENTITY,
+        "--wandb-entity",
+        WANDB_ENTITY,
         "--wandb-group",
         group,
         "--log-dir",
@@ -188,8 +209,16 @@ def mujoco_ppo_tianshou(
         cores=cores,
     )
 
+
 def metaworld_xppo_tianshou(
-    seed, env, group, priority=None, cores=2, add_to_path=None, total_steps=None, **kwargs
+    seed,
+    env,
+    group,
+    priority=None,
+    cores=2,
+    add_to_path=None,
+    total_steps=None,
+    **kwargs,
 ):
     if total_steps is None:
         total_steps = 20_000_000
@@ -207,10 +236,13 @@ def metaworld_xppo_tianshou(
         seed,
         "--env",
         env,
-        "--epoch", EPOCHS,
-        "--step-per-epoch", math.ceil(total_steps / EPOCHS),
+        "--epoch",
+        EPOCHS,
+        "--step-per-epoch",
+        math.ceil(total_steps / EPOCHS),
         *[f"--{k.replace('_', '-')}={v}" for (k, v) in kwargs.items()],
-        "--wandb-entity", WANDB_ENTITY,
+        "--wandb-entity",
+        WANDB_ENTITY,
         "--wandb-group",
         group,
         "--log-dir",
@@ -221,8 +253,16 @@ def metaworld_xppo_tianshou(
         cores=cores,
     )
 
+
 def metaworld_ppo_tianshou(
-    seed, env, group, priority=None, cores=2, add_to_path=None, total_steps=None, **kwargs
+    seed,
+    env,
+    group,
+    priority=None,
+    cores=2,
+    add_to_path=None,
+    total_steps=None,
+    **kwargs,
 ):
     if total_steps is None:
         total_steps = 20_000_000
@@ -240,10 +280,13 @@ def metaworld_ppo_tianshou(
         seed,
         "--env",
         env,
-        "--epoch", EPOCHS,
-        "--step-per-epoch", math.ceil(total_steps / EPOCHS),
+        "--epoch",
+        EPOCHS,
+        "--step-per-epoch",
+        math.ceil(total_steps / EPOCHS),
         *[f"--{k.replace('_', '-')}={v}" for (k, v) in kwargs.items()],
-        "--wandb-entity", WANDB_ENTITY,
+        "--wandb-entity",
+        WANDB_ENTITY,
         "--wandb-group",
         group,
         "--log-dir",
@@ -253,6 +296,7 @@ def metaworld_ppo_tianshou(
         priority=priority,
         cores=cores,
     )
+
 
 if HOST == BRAIN_HOSTNAME:
     # for seed in seeds:
@@ -302,9 +346,14 @@ if HOST == BRAIN_HOSTNAME:
                 seed,
                 "--env",
                 env,
-                "--base-task-path", In(f"xppo_tianshou/env=pick-place_seed={seed}_step-per-collect=10000_group=xppo-tianshou-metaworld/policy.pth"),
-                "--wandb-entity", WANDB_ENTITY,
-                "--wandb-group", group,
+                "--base-task-path",
+                In(
+                    f"xppo_tianshou/env=pick-place_seed={seed}_step-per-collect=10000_group=xppo-tianshou-metaworld/policy.pth"
+                ),
+                "--wandb-entity",
+                WANDB_ENTITY,
+                "--wandb-group",
+                group,
                 "--log-dir",
                 Out(f"xppo_tianshou/env={env}_seed={seed}_group={group}/"),
                 warmup_time=3,
@@ -320,11 +369,16 @@ if HOST == BRAIN_HOSTNAME:
                 seed,
                 "--env",
                 "pick-place",
-                "--base-task-path", In(f"xppo_tianshou/env={env}_seed={seed}_group={group}/policy.pth"),
-                "--wandb-entity", WANDB_ENTITY,
-                "--wandb-group", group,
+                "--base-task-path",
+                In(f"xppo_tianshou/env={env}_seed={seed}_group={group}/policy.pth"),
+                "--wandb-entity",
+                WANDB_ENTITY,
+                "--wandb-group",
+                group,
                 "--log-dir",
-                Out(f"xppo_tianshou/env=pick-place_base_env={env}_seed={seed}_group={back_group}/"),
+                Out(
+                    f"xppo_tianshou/env=pick-place_base_env={env}_seed={seed}_group={back_group}/"
+                ),
                 warmup_time=3,
                 ram_gb=6,
                 priority=(base_priority - 5, -seed, -env_i),
@@ -362,12 +416,12 @@ if HOST == BRAIN_HOSTNAME:
 
     for seed in seeds:
         for env_i, env in enumerate(mujoco_env_names_v3):
-
             mujoco_ppo_tianshou(
                 seed=seed,
                 env=env,
                 group="ppo-tianshou-mujoco",
-                priority=(70, -env_i, -seed))
+                priority=(70, -env_i, -seed),
+            )
 
             target_coeff = 3
             mujoco_xppo_tianshou(
@@ -375,42 +429,48 @@ if HOST == BRAIN_HOSTNAME:
                 env=env,
                 group="xppo-tianshou-mujoco",
                 target_coeff=target_coeff,
-                priority=(60, -env_i, -seed))
+                priority=(60, -env_i, -seed),
+            )
             mujoco_xppo_tianshou(
                 seed=seed,
                 env=env,
                 group="xppo-tianshou-mujoco",
                 fixup_loop=0,
                 target_coeff=target_coeff,
-                priority=(60, -env_i, -seed))
+                priority=(60, -env_i, -seed),
+            )
             mujoco_xppo_tianshou(
                 seed=seed,
                 env=env,
                 group="xppo-tianshou-mujoco",
                 fixup_every_repeat=0,
                 target_coeff=target_coeff,
-                priority=(60, -env_i, -seed))
+                priority=(60, -env_i, -seed),
+            )
             mujoco_xppo_tianshou(
                 seed=seed,
                 env=env,
                 group="xppo-tianshou-mujoco",
                 kl_target_stat="mean",
                 target_coeff=target_coeff,
-                priority=(60, -env_i, -seed))
+                priority=(60, -env_i, -seed),
+            )
             mujoco_xppo_tianshou(
                 seed=seed,
                 env=env,
                 group="xppo-tianshou-mujoco",
                 kl_target_stat="max",
                 target_coeff=1,
-                priority=(60, -env_i, -seed))
+                priority=(60, -env_i, -seed),
+            )
             mujoco_xppo_tianshou(
                 seed=seed,
                 env=env,
                 group="xppo-tianshou-mujoco",
                 init_beta=10,
                 beta_lr=0,
-                priority=(60, -env_i, -seed))
+                priority=(60, -env_i, -seed),
+            )
 
             mujoco_xppo_tianshou(
                 seed=seed,
@@ -419,7 +479,8 @@ if HOST == BRAIN_HOSTNAME:
                 kl_target_stat="mean",
                 fixup_loop=0,
                 target_coeff=target_coeff,
-                priority=(30, -env_i, -seed))
+                priority=(30, -env_i, -seed),
+            )
 
             # for eps_kl_args in [{"eps_kl": 0.2}, {}, {"eps_kl": 1.0}]:
             #     for target_coeff in [2, 3, 5]:
@@ -452,3 +513,26 @@ if HOST == BRAIN_HOSTNAME:
             #         kl_target_stat="mean",
             #         **eps_kl_args,
             #         priority=(50, -env_i, -seed))
+elif HOST == "tanuki":
+    GLOBAL_CONTEXT.max_concurrent_jobs = 4
+    ram_gb = 4
+
+    for seed in seeds[:1]:
+        for env_i, env in enumerate(MT50_ENV_NAMES[:1]):
+            group = "xppo-tianshou-beta-distribution-metaworld"
+            metaworld_xppo_tianshou(
+                seed=seed,
+                env=env,
+                group=group,
+                dist="beta",
+                step_per_collect=10_000,
+                priority=(3, -env_i, -seed),
+            )
+        for env_i, env in enumerate(mujoco_env_names_v3[:1]):
+            mujoco_xppo_tianshou(
+                seed=seed,
+                env=env,
+                dist="beta",
+                group="xppo-tianshou-beta-distribution-mujoco",
+                priority=(60, -env_i, -seed),
+            )

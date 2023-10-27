@@ -8,7 +8,7 @@ import pprint
 import numpy as np
 import torch
 from torch import nn
-from torch.distributions import Independent, Normal
+from torch.distributions import Independent, Normal, Beta
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.tensorboard import SummaryWriter
 
@@ -20,6 +20,7 @@ from tianshou.utils.net.continuous import ActorProb, Critic
 
 from mujoco_env_tianshou import make_mujoco_env
 from xppo_tianshou import XPPOPolicy
+
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -46,17 +47,18 @@ def get_args():
     parser.add_argument("--max-grad-norm", type=float, default=0.5)
     parser.add_argument("--eps-kl", type=float, default=0.5)
     parser.add_argument("--beta-lr", type=float, default=0.01)
-    parser.add_argument("--init-beta", type=float, default=1.)
+    parser.add_argument("--init-beta", type=float, default=1.0)
+    parser.add_argument("--dist", type=str, default="normal")
     parser.add_argument("--fixup-batchsize", type=int, default=1024)
     parser.add_argument("--value-clip", type=int, default=1)
     parser.add_argument("--norm-adv", type=int, default=0)
     parser.add_argument("--recompute-adv", type=int, default=0)
     parser.add_argument("--log-dir", type=str)
-    parser.add_argument("--render", type=float, default=0.)
+    parser.add_argument("--render", type=float, default=0.0)
     parser.add_argument("--fixup-every-repeat", type=int, default=1)
     parser.add_argument("--fixup-loop", type=int, default=1)
     parser.add_argument("--kl-target-stat", type=str, default="max")
-    parser.add_argument("--target-coeff", type=float, default=2.)
+    parser.add_argument("--target-coeff", type=float, default=2.0)
     parser.add_argument(
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
@@ -135,16 +137,24 @@ def test_xppo(args=get_args()):
     lr_scheduler = None
     if args.lr_decay:
         # decay learning rate to 0 linearly
-        max_update_num = np.ceil(
-            args.step_per_epoch / args.step_per_collect
-        ) * args.epoch
+        max_update_num = (
+            np.ceil(args.step_per_epoch / args.step_per_collect) * args.epoch
+        )
 
         lr_scheduler = LambdaLR(
             optim, lr_lambda=lambda epoch: 1 - epoch / max_update_num
         )
 
     def dist(*logits):
-        return Independent(Normal(*logits), 1)
+        if args.dist == "normal":
+            return Independent(Normal(*logits), 1)
+        elif args.dist == "beta":
+            alpha, beta = logits
+            alpha = nn.functional.softplus(alpha) + 1
+            beta = nn.functional.softplus(beta) + 1
+            return Independent(Beta(alpha, beta), 1)
+        else:
+            raise ValueError(f"Only 'normal' and 'beta' dist. supported. Got {dist}")
 
     policy = XPPOPolicy(
         actor,
