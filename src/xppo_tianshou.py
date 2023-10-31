@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.distributions import kl_divergence
+from pprint import pprint
 
 from tianshou.data import Batch, ReplayBuffer, to_torch_as
 from tianshou.policy import A2CPolicy
@@ -86,6 +87,7 @@ class XPPOPolicy(A2CPolicy):
         fixup_every_repeat: bool = True,
         target_coeff: float = 3.,
         init_beta: float = 1.,
+        max_beta: float = 0.,
         kl_target_stat: str = "max",
         advantage_normalization: bool = True,
         recompute_advantage: bool = False,
@@ -105,6 +107,7 @@ class XPPOPolicy(A2CPolicy):
         self._kl_target_stat = kl_target_stat
         self._fixup_loop = fixup_loop
         self._target_coeff = target_coeff
+        self._max_beta = max_beta
 
     def process_fn(
         self, batch: Batch, buffer: ReplayBuffer, indices: np.ndarray
@@ -139,6 +142,9 @@ class XPPOPolicy(A2CPolicy):
         if self._beta < 0:
             with torch.no_grad():
                 self._beta.copy_(0.)
+        if self._max_beta and self._beta > self._max_beta:
+            with torch.no_grad():
+                self._beta.copy_(self._max_beta)
         return beta_loss.item()
 
     def _violates_constraint(self, kl_div: torch.Tensor):
@@ -224,6 +230,12 @@ class XPPOPolicy(A2CPolicy):
                             beta_losses.append(self._optimize_beta(kl_div))
                     if constraint_satisfied:
                         break
+                    if fixup_grad_steps > 1000:
+                        pprint({
+                            'fixup_grad_steps': fixup_grad_steps,
+                            'beta': self._beta,
+                            'beta.grad': self._beta.grad,
+                        })
 
         return {
             "loss": losses,

@@ -20,5 +20,5 @@ for seed in seeds:
             "--wandb-group", group,
             "--env", env,
             "--seed", seed,
-            gpu_ram_gb=2.5, cores=8, ram_gb=20,
-            priority=(50, -env_i, -seed))
+            gpu_ram_gb=5, cores=8, ram_gb=24,
+            priority=(50, -seed, -env_i,))

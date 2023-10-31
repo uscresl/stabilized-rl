@@ -50,11 +50,13 @@ def get_args():
     parser.add_argument("--eps-kl", type=float, default=0.5)
     parser.add_argument("--beta-lr", type=float, default=0.01)
     parser.add_argument("--init-beta", type=float, default=1.)
+    parser.add_argument("--max-beta", type=float, default=1e3)
     parser.add_argument("--fixup-batchsize", type=int, default=256)
     parser.add_argument("--fixup-every-repeat", type=int, default=1)
     parser.add_argument("--fixup-loop", type=int, default=1)
     parser.add_argument("--kl-target-stat", type=str, default="max")
     parser.add_argument("--target-coeff", type=float, default=3.)
+    parser.add_argument("--check-nans", type=int, default=0)
     parser.add_argument(
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
@@ -168,6 +170,7 @@ def test_ppo(args=get_args()):
         eps_kl=args.eps_kl,
         beta_lr=args.beta_lr,
         init_beta=args.init_beta,
+        max_beta=args.max_beta,
         fixup_batchsize=args.fixup_batchsize,
         fixup_loop=args.fixup_loop,
         fixup_every_repeat=args.fixup_every_repeat,
@@ -278,7 +281,7 @@ def test_ppo(args=get_args()):
     # test train_collector and start filling replay buffer
     train_collector.collect(n_step=args.batch_size * args.training_num)
     # trainer
-    with torch.autograd.detect_anomaly():
+    with torch.autograd.detect_anomaly(bool(args.check_nans)):
         result = onpolicy_trainer(
             policy,
             train_collector,
