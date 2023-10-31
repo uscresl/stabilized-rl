@@ -325,9 +325,9 @@ if HOST == BRAIN_HOSTNAME:
     #                 priority=(60, -seed),
     #                 cores=cores,
     #             )
-    for seed in seeds:
+    for seed in seeds[:3]:
         if seed < 3:
-            base_priority = 70
+            base_priority = 60
         else:
             base_priority = 40
             continue
@@ -526,6 +526,38 @@ if HOST == BRAIN_HOSTNAME:
                 target_coeff=target_coeff,
                 priority=(30, -env_i, -seed),
             )
+
+            mujoco_xppo_tianshou(
+                seed=seed,
+                env=env,
+                group="fixpo-mujoco",
+                init_beta=10,
+                beta_lr=0,
+                fixup_loop=0,
+                priority=(160, -env_i, -seed),
+            )
+
+
+    for seed in seeds:
+        for env_i, env in enumerate(MT50_ENV_NAMES):
+            group = "xppo-tianshou-beta-distribution-metaworld"
+            metaworld_xppo_tianshou(
+                seed=seed,
+                env=env,
+                group=group,
+                dist="beta",
+                step_per_collect=10_000,
+                priority=(150, -env_i, -seed),
+            )
+        for env_i, env in enumerate(mujoco_env_names_v3):
+            mujoco_xppo_tianshou(
+                seed=seed,
+                env=env,
+                dist="beta",
+                group="xppo-tianshou-beta-distribution-mujoco",
+                priority=(160, -env_i, -seed),
+            )
+
             # for eps_kl_args in [{"eps_kl": 0.2}, {}, {"eps_kl": 1.0}]:
             #     for target_coeff in [2, 3, 5]:
             #         mujoco_xppo_tianshou(
