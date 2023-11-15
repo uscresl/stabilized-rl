@@ -20,15 +20,16 @@ if HOST == BRAIN_HOSTNAME:
     squeue_res = run(["squeue", "--all"], check=False, capture_output=True)
     if squeue_res.returncode == 0:
         out = squeue_res.stdout.decode()
-        found_waiting_normal_job = False
+        waiting_job_count = 0
         for line in out.split("\n"):
             if "(Priority)" in line or "(Resources)" in line:
                 if "slurm-lon" not in line:
-                    found_waiting_normal_job = True
-        if not found_waiting_normal_job:
+                    waiting_job_count += 1
+        if waiting_job_count <= 1:
             # Presumably free resources on the cluster
             GLOBAL_CONTEXT.max_concurrent_jobs += 1
         else:
+            # print("waiting_job_count =", waiting_job_count)
             if GLOBAL_CONTEXT.max_concurrent_jobs > len(GLOBAL_CONTEXT.running):
                 print(f"Running {len(GLOBAL_CONTEXT.running)} jobs")
             # Someone is waiting (maybe us), don't start any more jobs
@@ -36,7 +37,7 @@ if HOST == BRAIN_HOSTNAME:
     if GLOBAL_CONTEXT.max_concurrent_jobs < MIN_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
     # MAX_CONCURRENT_JOBS = 300
-    MAX_CONCURRENT_JOBS = 200
+    MAX_CONCURRENT_JOBS = 50
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
 
@@ -588,7 +589,7 @@ if HOST == BRAIN_HOSTNAME:
             )
 
 
-    for seed in seeds:
+    for seed in seeds[:3]:
         for env_i, env in enumerate(MT50_ENV_NAMES):
             group = "xppo-tianshou-beta-distribution-metaworld"
             metaworld_xppo_tianshou(
@@ -599,6 +600,7 @@ if HOST == BRAIN_HOSTNAME:
                 step_per_collect=10_000,
                 priority=(150, -env_i, -seed),
             )
+    for seed in seeds:
         for env_i, env in enumerate(mujoco_env_names_v3):
             mujoco_xppo_tianshou(
                 seed=seed,
