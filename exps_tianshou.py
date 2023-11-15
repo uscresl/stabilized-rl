@@ -212,6 +212,50 @@ def mujoco_ppo_tianshou(
     )
 
 
+def mujoco_trpo_tianshou(
+    seed,
+    env,
+    group,
+    priority=None,
+    cores=2,
+    add_to_path=None,
+    total_steps=None,
+    **kwargs,
+):
+    if total_steps is None:
+        total_steps = 10_000_000
+    if priority is None:
+        priority = (50, -seed)
+    if add_to_path is None:
+        add_to_path = [k for k, _ in kwargs.items()][:5]
+    kwargs_path = "_".join(
+        f"{k.replace('_', '-')}={kwargs.get(k)}" for k in add_to_path
+    )
+    return cmd(
+        "python",
+        "src/mujoco_trpo_tianshou.py",
+        "--seed",
+        seed,
+        "--env",
+        env,
+        "--epoch",
+        EPOCHS,
+        "--step-per-epoch",
+        math.ceil(total_steps / EPOCHS),
+        *[f"--{k.replace('_', '-')}={v}" for (k, v) in kwargs.items()],
+        "--wandb-entity",
+        WANDB_ENTITY,
+        "--wandb-group",
+        group,
+        "--log-dir",
+        Out(f"trpo_tianshou/env={env}_seed={seed}_{kwargs_path}_group={group}/"),
+        warmup_time=3,
+        ram_gb=6,
+        priority=priority,
+        cores=cores,
+    )
+
+
 def metaworld_xppo_tianshou(
     seed,
     env,
@@ -462,6 +506,12 @@ if HOST == BRAIN_HOSTNAME:
                 env=env,
                 group="ppo-tianshou-mujoco",
                 priority=(100, -env_i, -seed))
+
+            mujoco_trpo_tianshou(
+                seed=seed,
+                env=env,
+                group="trpo-tianshou-mujoco",
+                priority=(200, -env_i, -seed))
 
             target_coeff = 3
             mujoco_xppo_tianshou(
