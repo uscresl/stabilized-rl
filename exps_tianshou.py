@@ -36,8 +36,8 @@ if HOST == BRAIN_HOSTNAME:
             GLOBAL_CONTEXT.max_concurrent_jobs = len(GLOBAL_CONTEXT.running) - 1
     if GLOBAL_CONTEXT.max_concurrent_jobs < MIN_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
-    # MAX_CONCURRENT_JOBS = 300
-    MAX_CONCURRENT_JOBS = 50
+    MAX_CONCURRENT_JOBS = 300
+    # MAX_CONCURRENT_JOBS = 2
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
 
