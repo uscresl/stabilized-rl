@@ -1,58 +1,70 @@
-# stabilized-rl
+# FixPO
 
 ## Setup Instructions
-Install python 3.9
-Install Mujoco 2.1
 
-Enter a python 3.9 venv:
+Install Python >=3.8
+
+Install Python's poetry dependency manager:
+
 ```
-python3.9 -m venv venv
-source venv/bin/activate
+curl -sSL https://install.python-poetry.org | python3 -
+```
+
+Install Mujoco 2.1:
+
+```
+mkdir -p $HOME/.mujoco && \
+curl -O https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz && \
+tar xf mujoco210-linux-x86_64.tar.gz --directory $HOME/.mujoco
+
+echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mujoco210/bin' >> ~/.bashrc
+source ~/.bashrc
 ```
 
 Install dependencies:
+
 ```
+pip install --upgrade --user pip
 poetry install
-pip install -e ./garage
-pip install -e ./metaworld
-pip install -e ./sample-factory
 ```
 
-Add any experiments you'd like to run to `exps.py`
+Alternatively, use `install.sh`.
 
-Run all unfinished experiments:
+There are subdirectories containing `tianshou v0.5.0`, `Meta-World v2.0.0`, and
+`trust-region-layers` in this repo that are patched to be compatible with each other.
+See `patches` if you would like to apply these changes yourself.
+
+Most experiments are listed in `exps_tianshou.py` and use code in `src`.
+
+To run those experiments:
+
 ```
-python src/runexp.py
+poetry run doexp exps_tianshou.py
 ```
 
-## How to convert PPO to xPPO:
+## File Overview
 
-  - Remove PPO clip (just use likelyhood ratio times advantage)
+`exps_tianshou.py`: Defines all of the experiments to run that use tianshou.
+`exps_trust_region_layers.py`: Defines all of the experiments to run that use trust_region_layers.
 
-$$ L_{pg} = -\mathbb{E}_t\left[\frac {\pi_{new}(a_t|s_t)} {\pi_{old}(a_t|s_t)} \hat{A_t}\right] $$
-  - Use KL penalty with loss coefficient "beta" / $\beta$
-    - Also, have a term $x = 1$
-    - i.e.
+`doexp`: Runs all experiments defined in `exps.py`
 
-$$ L_{\pi} = xL_{pg} + \beta \mathbb{E}_t\left[KL(\pi_{new}(a_t|s_t), \pi_{old}(a_t|s_t))\right] $$
-  - Make beta a parameter and add a optimizer and loss on it
-    - If the optimizer makes beta become less than 0.01, reset it to 0.01
-    - Loss on beta is
 
-$$ L_{\beta} = \beta * \left(KL_{target} - \mathbb{SG}[max_t(KL(\pi_{new}(a_t|s_t), \pi_{old}(a_t|s_t)))]\right) $$
+`src/fixpo_tianshou.py`: Main algorithm code.
 
-  - Reset value of beta and beta optimizer at start of "step" (group of epochs)
-    - beta should be reset to one
-    - Use the Adam optimizer, with lr=0.1, momentum=0.999
-  - Reset policy optimizer at start of step
-    - Use Adam optimizer, same hparams as PPO
-  - Add a loop at the end of each epoch that keeps running the loss, but without the policy gradient loss (still step the policy gradient optimizer)
-    - Should use full batch gradient descent (might need to use gradient accumulation)
-    - I.e. set $x = 0$ in
+`src/mujoco_fixpo_tianshou.py`: Launcher for FixPO with Gym environments.
 
-$$ L_{\pi} = xL_{pg} + \beta \mathbb{E}_t\left[KL(\pi_{new}(a_t|s_t), \pi_{old}(a_t|s_t))\right] $$
-  - That loss should terminate as soon as the KL div statistic is less than the KL target (for the whole batch)
-    - i.e. when
+`src/metaworld_fixpo_tianshou.py`: Launcher for FixPO with Meta-World environments.
 
-$$ max_t(KL(\pi_{new}(a_t|s_t), \pi_{old}(a_t|s_t))) < KL_{target} $$
- - (Optional?) use a larger offline buffer for the second loop
+`src/mujoco_ppo_tianshou.py`: Launcher for FixPO with Gym environments.
+
+`src/metaworld_ppo_tianshou.py`: Launcher for FixPO with Meta-World environments.
+
+`src/metaworld_utils.py`: Helper function for setting up Meta-World environments.
+
+`src/metaworld_env_tianshou.py`: Helper function for setting up Meta-World environments.
+
+`patches/tianshou.patch`: Patch to Tianshou v0.5.0 that allows running Meta-World experiments.
+`patches/metaworld.patch`: Patch to Meta-World v2.0.0 that allows running Meta-World experiments.
+`patches/trust_region_layers.patch`: Patch to trust_region_layers that allows running Meta-World experiments.
+`patches/mujoco_kl_config.json`: Base config to use the KL projection proposed in  trust_region_layers.

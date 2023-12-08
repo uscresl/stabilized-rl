@@ -1,0 +1,187 @@
+--- H:\code\tianshou\tianshou\data\collector.py
++++ H:\code\fixpo\tianshou\tianshou\data\collector.py
+@@ -250,6 +250,8 @@
+
+         start_time = time.time()
+
++        ep_success = np.zeros(self.env_num, dtype=bool)
++        episode_success_rates = []
+         step_count = 0
+         episode_count = 0
+         episode_rews = []
+@@ -297,6 +299,9 @@
+                 ready_env_ids
+             )
+             done = np.logical_or(terminated, truncated)
++            if not isinstance(info, dict) and "success" in info[0]:
++                success = np.asarray([inf["success"] for inf in info], dtype=bool)
++                ep_success |= success
+
+             self.data.update(
+                 obs_next=obs_next,
+@@ -338,6 +343,8 @@
+                 episode_count += len(env_ind_local)
+                 episode_lens.append(ep_len[env_ind_local])
+                 episode_rews.append(ep_rew[env_ind_local])
++                episode_success_rates.append(ep_success[env_ind_local].astype('float32'))
++                ep_success[env_ind_local] = False
+                 episode_start_indices.append(ep_idx[env_ind_local])
+                 # now we copy obs_next to obs, but since there might be
+                 # finished episodes, we have to reset finished envs first.
+@@ -391,9 +398,11 @@
+             )
+             rew_mean, rew_std = rews.mean(), rews.std()
+             len_mean, len_std = lens.mean(), lens.std()
++            success_rate_mean = np.concatenate(episode_success_rates).mean()
+         else:
+             rews, lens, idxs = np.array([]), np.array([], int), np.array([], int)
+             rew_mean = rew_std = len_mean = len_std = 0
++            success_rate_mean = 0.
+
+         return {
+             "n/ep": episode_count,
+@@ -405,6 +414,7 @@
+             "len": len_mean,
+             "rew_std": rew_std,
+             "len_std": len_std,
++            "success_rate": success_rate_mean,
+         }
+
+
+@@ -499,6 +509,8 @@
+
+         start_time = time.time()
+
++        ep_success = np.zeros(self.env_num, dtype=bool)
++        episode_success_rates = []
+         step_count = 0
+         episode_count = 0
+         episode_rews = []
+@@ -556,6 +568,9 @@
+                 ready_env_ids
+             )
+             done = np.logical_or(terminated, truncated)
++            if "success" in info[0]:
++                success = np.asarray([inf["success"] for inf in info], dtype=bool)
++                ep_success |= success
+
+             # change self.data here because ready_env_ids has changed
+             try:
+@@ -615,6 +630,8 @@
+                 episode_count += len(env_ind_local)
+                 episode_lens.append(ep_len[env_ind_local])
+                 episode_rews.append(ep_rew[env_ind_local])
++                episode_success_rates.append(ep_success[env_ind_local].astype('float32'))
++                ep_success[env_ind_local] = False
+                 episode_start_indices.append(ep_idx[env_ind_local])
+                 # now we copy obs_next to obs, but since there might be
+                 # finished episodes, we have to reset finished envs first.
+@@ -655,9 +672,11 @@
+             )
+             rew_mean, rew_std = rews.mean(), rews.std()
+             len_mean, len_std = lens.mean(), lens.std()
++            success_rate_mean = np.concatenate(episode_success_rates).mean()
+         else:
+             rews, lens, idxs = np.array([]), np.array([], int), np.array([], int)
+             rew_mean = rew_std = len_mean = len_std = 0
++            success_rate_mean = 0.
+
+         return {
+             "n/ep": episode_count,
+@@ -669,4 +688,5 @@
+             "len": len_mean,
+             "rew_std": rew_std,
+             "len_std": len_std,
++            "success_rate": success_rate_mean,
+         }
+
+--- H:\code\tianshou\tianshou\env\venvs.py
++++ H:\code\fixpo\tianshou\tianshou\env\venvs.py
+@@ -46,8 +46,13 @@
+         ), "Env generators that are provided to vector environemnts must be callable."
+
+         env = fn()
+-        if isinstance(env, (gym.Env, PettingZooEnv)):
+-            return env
++        if PettingZooEnv is not None:
++            if isinstance(env, (gym.Env, PettingZooEnv)):
++                return env
++        else:
++            if isinstance(env, gym.Env):
++                print("Is gymnasium Env")
++                return env
+
+         if not has_old_gym or not isinstance(env, old_gym.Env):
+             raise ValueError(
+@@ -79,7 +84,7 @@
+         if gym_version >= packaging.version.parse("0.26.0"):
+             return shimmy.GymV26CompatibilityV0(env=env)
+         elif gym_version >= packaging.version.parse("0.22.0"):
+-            return shimmy.GymV22CompatibilityV0(env=env)
++            return shimmy.GymV21CompatibilityV0(env=env)
+         else:
+             raise Exception(
+                 f"Found OpenAI Gym version {gym.__version__}. "
+
+--- H:\code\tianshou\tianshou\trainer\base.py
++++ H:\code\fixpo\tianshou\tianshou\trainer\base.py
+@@ -353,12 +353,22 @@
+             if self.save_best_fn:
+                 self.save_best_fn(self.policy)
+         if self.verbose:
+-            print(
+-                f"Epoch #{self.epoch}: test_reward: {rew:.6f} ± {rew_std:.6f},"
+-                f" best_reward: {self.best_reward:.6f} ± "
+-                f"{self.best_reward_std:.6f} in #{self.best_epoch}",
+-                flush=True
+-            )
++            if "success_rate" in test_result:
++                success_rate = test_result["success_rate"]
++                print(
++                    f"Epoch #{self.epoch}: test_reward: {rew:.6f} ± {rew_std:.6f},"
++                    f" success_rate: {success_rate:.3f},"
++                    f" best_reward: {self.best_reward:.6f} ± "
++                    f"{self.best_reward_std:.6f} in #{self.best_epoch}",
++                    flush=True
++                )
++            else:
++                print(
++                    f"Epoch #{self.epoch}: test_reward: {rew:.6f} ± {rew_std:.6f},"
++                    f" best_reward: {self.best_reward:.6f} ± "
++                    f"{self.best_reward_std:.6f} in #{self.best_epoch}",
++                    flush=True
++                )
+         if not self.is_run:
+             test_stat = {
+                 "test_reward": rew,
+@@ -367,6 +377,8 @@
+                 "best_reward_std": self.best_reward_std,
+                 "best_epoch": self.best_epoch
+             }
++            if "success_rate" in test_result:
++                test_stat["success_rate"] = test_result["success_rate"]
+         else:
+             test_stat = {}
+         if self.stop_fn and self.stop_fn(self.best_reward):
+
+--- H:\code\tianshou\tianshou\utils\logger\base.py
++++ H:\code\fixpo\tianshou\tianshou\utils\logger\base.py
+@@ -55,6 +55,8 @@
+                     "train/reward": collect_result["rew"],
+                     "train/length": collect_result["len"],
+                 }
++                if "success_rate" in collect_result:
++                    log_data["train/success_rate"] = collect_result["success_rate"]
+                 self.write("train/env_step", step, log_data)
+                 self.last_log_train_step = step
+
+@@ -74,6 +76,8 @@
+                 "test/reward_std": collect_result["rew_std"],
+                 "test/length_std": collect_result["len_std"],
+             }
++            if "success_rate" in collect_result:
++                log_data["test/success_rate"] = collect_result["success_rate"]
+             self.write("test/env_step", step, log_data)
+             self.last_log_test_step = step
+
+

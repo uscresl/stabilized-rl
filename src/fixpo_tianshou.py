@@ -10,7 +10,7 @@ from tianshou.policy import A2CPolicy
 from tianshou.utils.net.common import ActorCritic
 
 
-class XPPOPolicy(A2CPolicy):
+class FixPOPolicy(A2CPolicy):
     r"""Implementation of Proximal Policy Optimization. arXiv:1707.06347.
 
     :param torch.nn.Module actor: the actor network following the rules in

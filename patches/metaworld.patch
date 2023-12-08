@@ -1,0 +1,31 @@
+--- H:\code\Metaworld\metaworld\envs\mujoco\env_dict.py
++++ H:\code\fixpo\metaworld\metaworld\envs\mujoco\env_dict.py
+@@ -620,16 +620,27 @@
+             env._partially_observable = False
+             env._freeze_rand_vec = False
+             env._set_task_called = True
++            env.add_reset_info = True
+             env.reset()
+             env._freeze_rand_vec = True
+             if seed is not None:
+                 env.seed(seed)
+                 np.random.set_state(st0)
+
++        def reset(self, seed=None, *args, **kwargs):
++            if seed is not None:
++                self.seed(seed)
++            obs = env_cls.reset(self)
++            if self.add_reset_info:
++                return obs, {}
++            else:
++                return obs
++
+         d['__init__'] = initialize
+         og_env_name = re.sub("(^|[-])\s*([a-zA-Z])",
+                              lambda p: p.group(0).upper(), env_name)
+         og_env_name = og_env_name.replace("-", "")
++        d['reset'] = reset
+
+         og_env_key = '{}-goal-observable'.format(env_name)
+         og_env_name = '{}GoalObservable'.format(og_env_name)
+

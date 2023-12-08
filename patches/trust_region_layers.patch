@@ -1,0 +1,314 @@
+--- H:\code\trust-region-layers\trust_region_projections\algorithms\pg\pg.py
++++ H:\code\fixpo\trust-region-layers\trust_region_projections\algorithms\pg\pg.py
+@@ -32,6 +32,7 @@
+ from trust_region_projections.projections.projection_factory import get_projection_layer
+ from trust_region_projections.trajectories.dataclass import TrajectoryOnPolicy
+ from trust_region_projections.trajectories.trajectory_sampler import TrajectorySampler
++from trust_region_projections.utils import make_env
+ from trust_region_projections.utils.custom_store import CustomStore
+ from trust_region_projections.utils.network_utils import get_lr_schedule, get_optimizer
+ from trust_region_projections.utils.torch_utils import flatten_batch, generate_minibatches, get_numpy, \
+@@ -524,6 +525,10 @@
+
+             rewards.append(rewards_dict['exploration']['mean'])
+             rewards_test.append(rewards_dict['evaluation']['mean'])
++            # We've succeeded for 100 episodes in a row.
++            # Stop the job
++            if rewards_dict['exploration'].get('success_rate', 0.0) == 1.0:
++                break
+
+         self.store["final_results"].append_row({
+             'iteration': epoch,
+@@ -625,7 +630,7 @@
+
+         print(params)
+
+-        env = gym.make(params['game'])
++        env = make_env(params['game'])
+         obs_dim = env.observation_space.shape[0]
+         action_dim = env.action_space.shape[0]
+
+
+--- H:\code\trust-region-layers\trust_region_projections\algorithms\abstract_algo.py
++++ H:\code\fixpo\trust-region-layers\trust_region_projections\algorithms\abstract_algo.py
+@@ -107,6 +107,7 @@
+             'step_reward': float,
+             'length': float,
+             'length_std': float,
++            'success_rate': float,
+         }
+         self.store.add_table('exploration_reward', reward_schema)
+         self.store.add_table('evaluation_reward', reward_schema)
+@@ -188,7 +189,8 @@
+                f"Min/Max {type} reward: {reward_dict['min']:.4f}/{reward_dict['max']:.4f} | " \
+                f"Avg. step {type} reward: {reward_dict['step_reward']:.4f} | " \
+                f"Avg. {type} episode length: {reward_dict['length']:.4f} +/- " \
+-               f"{reward_dict['length_std'] :.2f}"
++               f"{reward_dict['length_std'] :.2f} | " \
++               f"Avg. success rate: {reward_dict['success_rate'] :.3f}"
+
+     def regression_step(self, obs: ch.Tensor, q: Tuple[ch.Tensor, ch.Tensor], n_minibatches: int, logging_step: int):
+         """
+--- H:\code\trust-region-layers\trust_region_projections\projections\papi_projection.py
++++ H:\code\fixpo\trust-region-layers\trust_region_projections\projections\papi_projection.py
+@@ -60,13 +60,17 @@
+         """
+
+         assert entropy_first
++        # super().__init__(proj_type, mean_bound, cov_bound, 0.0, False, None, None, None, 0.0, 0.0, entropy_eq,
++        #                  entropy_first, cpu, dtype)
+         super().__init__(proj_type, mean_bound, cov_bound, 0.0, False, None, None, None, 0.0, 0.0, entropy_eq,
+-                         entropy_first, cpu, dtype)
++                         entropy_first, do_regression=kwargs['do_regression'], regression_iters=kwargs['regression_iters'],
++                         regression_lr=kwargs['regression_lr'], optimizer_type_reg=kwargs['optimizer_type_reg'],
++                         cpu=cpu, dtype=dtype)
+
+         self.last_policies = []
+
+     def __call__(self, policy, p, q, step=0, *args, **kwargs):
+-        if kwargs.get("obs"):
++        if "obs" in kwargs:
+             self._papi_steps(policy, q, **kwargs)
+         else:
+             return p
+@@ -183,7 +187,8 @@
+
+         for i, pi in enumerate(reversed(self.last_policies)):
+             p_prime = pi(obs)
+-            mean_part, cov_part = pi.kl_divergence(p_prime, q)
++            # mean_part, cov_part = pi.kl_divergence(p_prime, q)
++            mean_part, cov_part = gaussian_kl(pi, p_prime, q)
+             if (mean_part + cov_part).mean() <= self.mean_bound + self.cov_bound:
+                 intermed_policy = pi
+                 n_backtracks = i
+
+--- H:\code\trust-region-layers\trust_region_projections\trajectories\normalized_env_wrapper.py
++++ H:\code\fixpo\trust-region-layers\trust_region_projections\trajectories\normalized_env_wrapper.py
+@@ -19,6 +19,7 @@
+
+ from trust_region_projections.trajectories.env_normalizer import BaseNormalizer, MovingAvgNormalizer
+ from trust_region_projections.trajectories.vector_env import SequentialVectorEnv
++import trust_region_projections.utils as utils
+
+
+ def make_env(env_id: str, seed: int, rank: int) -> callable:
+@@ -35,7 +36,7 @@
+     """
+
+     def _get_env():
+-        env = gym.make(env_id)
++        env = utils.make_env(env_id)
+         env.seed(seed + rank)
+         return env
+
+
+--- H:\code\trust-region-layers\trust_region_projections\trajectories\trajectory_sampler.py
++++ H:\code\fixpo\trust-region-layers\trust_region_projections\trajectories\trajectory_sampler.py
+@@ -64,6 +64,7 @@
+
+         self.total_rewards = collections.deque(maxlen=100)
+         self.total_steps = collections.deque(maxlen=100)
++        self.total_success = collections.deque(maxlen=100)
+
+         self.envs = NormalizedEnvWrapper(env_id, n_envs, n_test_envs, max_episode_length=max_episode_length,
+                                          gamma=discount_factor, norm_obs=norm_obs, clip_obs=clip_obs,
+@@ -143,9 +144,10 @@
+
+         if ep_infos:
+             ep_infos = np.array(ep_infos)
+-            ep_length, ep_reward = ep_infos[:, 0], ep_infos[:, 1]
++            ep_length, ep_reward, ep_success = ep_infos[:, 0], ep_infos[:, 1], ep_infos[:, 2]
+             self.total_rewards.extend(ep_reward)
+             self.total_steps.extend(ep_length)
++            self.total_success.extend(ep_success)
+
+         return TrajectoryOnPolicyRaw(*out)
+
+@@ -165,9 +167,11 @@
+         n_runs = 1
+         ep_rewards = np.zeros((n_runs, self.n_test_envs,))
+         ep_lengths = np.zeros((n_runs, self.n_test_envs,))
++        ep_success = np.zeros((n_runs, self.n_test_envs,))
+
+         for i in range(n_runs):
+-            not_dones = np.ones((self.n_test_envs,), np.bool)
++            not_dones = np.ones((self.n_test_envs,), np.bool_)
++            successful_episode = np.ones((self.n_test_envs,), np.bool_)
+             obs = self.envs.reset_test()
+             while np.any(not_dones):
+                 ep_lengths[i, not_dones] += 1
+@@ -178,20 +182,23 @@
+                     actions = p[0] if deterministic else policy.sample(p)
+                     actions = policy.squash(actions)
+                 obs, rews, dones, infos = self.envs.step_test(get_numpy(actions))
++                for j, step_infos in enumerate(infos["info"]):
++                    ep_success[i, j] = max(ep_success[i, j], step_infos.get("success", 0.0))
+                 ep_rewards[i, not_dones] += rews[not_dones]
+
+                 # only set to False when env has never terminated before, otherwise we favor earlier terminating envs.
+                 not_dones = np.logical_and(~dones, not_dones)
+
+-        return self.get_reward_dict(ep_rewards, ep_lengths)
++        return self.get_reward_dict(ep_rewards, ep_lengths, ep_success)
+
+     def get_exploration_performance(self):
+         ep_reward = np.array(self.total_rewards)
+         ep_length = np.array(self.total_steps)
+-        return self.get_reward_dict(ep_reward, ep_length)
++        ep_success = np.array(self.total_success)
++        return self.get_reward_dict(ep_reward, ep_length, ep_success)
+
+     @staticmethod
+-    def get_reward_dict(ep_reward, ep_length):
++    def get_reward_dict(ep_reward, ep_length, ep_success):
+         return {
+             'mean': ep_reward.mean().item(),
+             'std': ep_reward.std().item(),
+@@ -200,6 +207,7 @@
+             'step_reward': (ep_reward / ep_length).mean().item(),
+             'length': ep_length.mean().item(),
+             'length_std': ep_length.std().item(),
++            'success_rate': ep_success.mean().item(),
+         }
+
+     @property
+
+--- H:\code\trust-region-layers\trust_region_projections\trajectories\vector_env.py
++++ H:\code\fixpo\trust-region-layers\trust_region_projections\trajectories\vector_env.py
+@@ -40,6 +40,7 @@
+         self.max_episode_length = max_episode_length
+         self.length_counter = np.zeros((self.num_envs,))
+         self.total_ep_reward = np.zeros((self.num_envs,))
++        self.ep_success = np.zeros((self.num_envs,))
+
+     def step(self, actions):
+         """
+@@ -55,12 +56,13 @@
+         - states, a (actors, ... state_shape) tensor with resulting states
+         - dones, an actors-length tensor with 1 if terminal, 0 otw
+         """
+-        rewards, dones = np.zeros(self.num_envs), np.zeros(self.num_envs, np.bool)
++        rewards, dones = np.zeros(self.num_envs), np.zeros(self.num_envs, np.bool_)
+         states = np.zeros((self.num_envs,) + self.observation_space.shape)
+         ep_info = defaultdict(list)
+
+         for i, (action, env) in enumerate(zip(actions, self.envs)):
+             obs, rew, done, info = env.step(action)
++            self.ep_success[i] = max(self.ep_success[i], info.get("success", 0.0))
+
+             self.length_counter[i] += 1
+             self.total_ep_reward[i] += rew
+@@ -75,9 +77,10 @@
+
+             if done:
+                 # return stats after max episode length in order to evaluate the exploration policy performance
+-                ep_info["done"].append((self.length_counter[i], self.total_ep_reward[i]))
++                ep_info["done"].append((self.length_counter[i], self.total_ep_reward[i], float(self.ep_success[i])))
+                 self.length_counter[i] = 0.
+                 self.total_ep_reward[i] = 0.
++                self.ep_success[i] = 0.
+
+             # Aggregate
+             ep_info["info"].append(info)
+@@ -88,6 +91,7 @@
+         return np.vstack(states), np.array(rewards), np.array(dones), ep_info
+
+     def reset(self):
++        self.ep_success[:] = 0.
+         return np.vstack([env.reset() for env in self.envs])
+
+     def render(self, mode='human'):
+
+--- H:\code\trust-region-layers\trust_region_projections\utils\__init__.py
++++ H:\code\fixpo\trust-region-layers\trust_region_projections\utils\__init__.py
+@@ -13,3 +13,19 @@
+ #
+ #   You should have received a copy of the GNU Affero General Public License
+ #   along with this program.  If not, see <https://www.gnu.org/licenses/>.
++
++
++def make_env(env_name: str):
++    if env_name.startswith('metaworld-'):
++        from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE
++        from gym.wrappers import TimeLimit
++
++        env_name = env_name[len('metaworld-'):]
++        env = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[env_name + "-v2-goal-observable"](seed=0)
++        env.seeded_rand_vec = True
++        env.add_reset_info = False
++        env = TimeLimit(env, max_episode_steps=500)
++        return env
++    else:
++        import gym
++        return gym.make(env_name)
+
+--- H:\code\trust-region-layers\main.py
++++ H:\code\fixpo\trust-region-layers\main.py
+@@ -19,8 +19,10 @@
+ import logging
+ from glob import glob
+ from multiprocessing import JoinableQueue, Process
++import os
++import shutil
+
+-import os
++import wandb
+
+ from trust_region_projections.algorithms.pg.pg import PolicyGradient
+ from trust_region_projections.utils.custom_store import CustomStore
+@@ -54,7 +56,7 @@
+     q.join()
+
+
+-def single_run(agent_config: str, agent_generator: callable):
++def single_run(agent_config: str, agent_generator: callable, wandb_group: str):
+     params = json.load(open(agent_config))
+
+     # generate name
+@@ -86,6 +88,19 @@
+                     f"seed{params['seed']}"
+     })
+
++    wandb.init(
++        group=wandb_group,
++        sync_tensorboard=True,
++        resume="allow",
++        config=params,
++    )
++    if os.path.exists(params['out_dir']):
++        try:
++            shutil.rmtree(params['out_dir'])
++        except OSError:
++            # Probably transient NFS error?
++            pass
++
+     agent = agent_generator(params)
+     agent.learn()
+     agent.store.close()
+@@ -97,6 +112,7 @@
+     # parser.add_argument('--algorithm', type=str, default="pg", help='Specify which algorithm to use.')
+     parser.add_argument('--load-exp-name', type=str, default=None, help='Load model from specified location.')
+     parser.add_argument('--train-steps', type=int, default=None, help='New total training steps.', )
++    parser.add_argument('--wandb-group', type=str, default="trust-region-layers", help='WandB group.', )
+     parser.add_argument('--test', action='store_true', help='Only test loaded model.', )
+     parser.add_argument('--num-threads', type=int, default=10,
+                         help='Number of threads for running multiple experiments.', )
+@@ -116,6 +132,7 @@
+         agent.store.close()
+
+     if not os.path.isfile(path):
++        assert False, "WandB not setup for multithreaded runs"
+         multithreaded_run(path, get_new_ppo_agent, num_threads=args.num_threads)
+     else:
+-        single_run(path, get_new_ppo_agent)
++        single_run(path, get_new_ppo_agent, args.wandb_group)
+
+--- H:\code\trust-region-layers\requirements.txt
++++ H:\code\fixpo\trust-region-layers\requirements.txt
+@@ -6,4 +6,4 @@
+ cox
+ python-git
+ gym
+-mujoco-py<2.1,>=2.0
++mujoco-py<2.2,>=2.1
+
