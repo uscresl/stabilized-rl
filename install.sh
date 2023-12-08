@@ -1,6 +1,5 @@
 #!/bin/bash -xe
 
-sudo apt-get install
 # If .venv doesn't exist, create it
 if [ ! -d .venv ]; then
   python3 -m venv .venv
