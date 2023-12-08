@@ -45,6 +45,7 @@ poetry run doexp exps_tianshou.py
 ## File Overview
 
 `exps_tianshou.py`: Defines all of the experiments to run that use tianshou.
+
 `exps_trust_region_layers.py`: Defines all of the experiments to run that use trust_region_layers.
 
 `doexp`: Runs all experiments defined in `exps.py`
@@ -56,9 +57,11 @@ poetry run doexp exps_tianshou.py
 
 `src/metaworld_fixpo_tianshou.py`: Launcher for FixPO with Meta-World environments.
 
-`src/mujoco_ppo_tianshou.py`: Launcher for FixPO with Gym environments.
+`src/mujoco_ppo_tianshou.py`: Launcher for PPO with Gym environments.
 
-`src/metaworld_ppo_tianshou.py`: Launcher for FixPO with Meta-World environments.
+`src/mujoco_trpo_tianshou.py`: Launcher for TRPO with Gym environments.
+
+`src/metaworld_ppo_tianshou.py`: Launcher for PPO with Meta-World environments.
 
 `src/metaworld_utils.py`: Helper function for setting up Meta-World environments.
 
