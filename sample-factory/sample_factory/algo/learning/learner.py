@@ -32,6 +32,28 @@ from sample_factory.utils.typing import ActionDistribution, Config, InitModelDat
 from sample_factory.utils.utils import ensure_dir_exists, experiment_dir, log
 
 
+def explained_variance(y_pred, y_true):
+    """
+    Computes fraction of variance that ypred explains about y.
+    Returns 1 - Var[y-ypred] / Var[y]
+    interpretation:
+        ev=0  =>  might as well have predicted zero
+        ev=1  =>  perfect prediction
+        ev<0  =>  worse than just predicting zero
+    :param y_pred: the prediction
+    :param y_true: the expected value
+    :return: explained variance of ypred and y
+    """
+    assert y_true.ndim == 1 and y_pred.ndim == 1
+    var_y = torch.var(y_true, unbiased=False).item()
+    y_explained_variance = np.nan if var_y == 0 else 1 - torch.var(y_true - y_pred, unbiased=False) / var_y
+
+    unbiased_var_y = torch.var(y_true, unbiased=True).item()
+    unbiased_y_explained_variance = np.nan if unbiased_var_y == 0 else 1 - torch.var(y_true - y_pred, unbiased=True) / unbiased_var_y
+
+    return y_explained_variance.item(), unbiased_y_explained_variance.item()
+
+
 class LearningRateScheduler:
     def update(self, current_lr, recent_kls):
         return current_lr
@@ -175,6 +197,27 @@ class Learner(Configurable):
 
         self.is_initialized = False
 
+        # FixPO
+        self._beta = torch.nn.Parameter(torch.tensor(cfg.init_beta))
+        self._kl_target_stat = "max"
+        self._beta_lr = cfg.beta_lr
+        self._eps_kl = cfg.eps_kl
+        self.second_penalty_loops = []
+        self._target_coeff = cfg.target_coeff
+        self.beta_losses = []
+        self._fixup_batchsize = cfg.fixup_batchsize
+        self._fixup_every_repeat = cfg.fixup_every_repeat
+        self._fixup_loop = cfg.fixup_loop
+        self._beta_optim = torch.optim.Adam(
+            [self._beta],
+            lr=self._beta_lr,
+        )
+        self.lock_beta_optim = cfg.lock_beta_optim
+        if self.lock_beta_optim:
+            beta_policy_id = 0
+            beta_policy_versions = torch.zeros([cfg.num_policies], dtype=torch.int32)
+            self.beta_param_server = ParameterServer(beta_policy_id, beta_policy_versions, cfg.serial_mode)
+
     def init(self) -> InitModelData:
         if self.cfg.exploration_loss_coeff == 0.0:
             self.exploration_loss_func = lambda action_distr, valids, num_invalids: 0.0
@@ -244,6 +287,8 @@ class Learner(Configurable):
 
         self.load_from_checkpoint(self.policy_id)
         self.param_server.init(self.actor_critic, self.train_step, self.device)
+        if self.lock_beta_optim:
+            self.beta_param_server.init(self._beta_optim, self.train_step, self.device)
         self.policy_versions_tensor[self.policy_id] = self.train_step
 
         self.lr_scheduler = get_lr_scheduler(self.cfg)
@@ -412,8 +457,12 @@ class Learner(Configurable):
     def _maybe_load_policy(self) -> None:
         if self.policy_to_load is not None:
             with self.param_server.policy_lock:
-                # don't re-load progress if we are loading from another policy checkpoint
-                self.load_from_checkpoint(self.policy_to_load, load_progress=False)
+                if self.lock_beta_optim:
+                    with self.beta_param_server.policy_lock:
+                        # don't re-load progress if we are loading from another policy checkpoint
+                        self.load_from_checkpoint(self.policy_to_load, load_progress=False)
+                else:
+                    self.load_from_checkpoint(self.policy_to_load, load_progress=False)
 
             # make sure everything (such as policy weights) is committed to shared device memory
             synchronize(self.cfg, self.device)
@@ -426,11 +475,11 @@ class Learner(Configurable):
 
     @staticmethod
     def _policy_loss(ratio, adv, clip_ratio_low, clip_ratio_high, valids, num_invalids: int):
-        clipped_ratio = torch.clamp(ratio, clip_ratio_low, clip_ratio_high)
+        # clipped_ratio = torch.clamp(ratio, clip_ratio_low, clip_ratio_high)
         loss_unclipped = ratio * adv
-        loss_clipped = clipped_ratio * adv
-        loss = torch.min(loss_unclipped, loss_clipped)
-        loss = masked_select(loss, valids, num_invalids)
+        # loss_clipped = clipped_ratio * adv
+        # loss = torch.min(loss_unclipped, loss_clipped)
+        loss = masked_select(loss_unclipped, valids, num_invalids)
         loss = -loss.mean()
 
         return loss
@@ -463,9 +512,43 @@ class Learner(Configurable):
         kl_old = masked_select(kl_old, valids, num_invalids)
         kl_loss = kl_old.mean()
 
-        kl_loss *= self.cfg.kl_loss_coeff
+        # kl_loss *= self.cfg.kl_loss_coeff
+        kl_loss *= self._beta.detach()
 
         return kl_old, kl_loss
+
+    def _optimize_beta(self, kl_div: torch.Tensor):
+        self._beta_optim.zero_grad()
+        if self._kl_target_stat == "max":
+            beta_loss = self._beta * (self._eps_kl - self._target_coeff * kl_div.detach().max())
+        elif self._kl_target_stat == "mean":
+            beta_loss = self._beta * (self._eps_kl - self._target_coeff * kl_div.detach().mean())
+        else:
+            raise ValueError("Unknown kl_target_stat", self._kl_target_stat)
+
+        # This backward pass only affects self._beta
+        beta_loss.backward()
+        if self.lock_beta_optim:
+            with self.beta_param_server.policy_lock:
+                self._beta_optim.step()
+                if self._beta < 0:
+                    with torch.no_grad():
+                        self._beta.copy_(torch.tensor(0.0))
+        else:
+            self._beta_optim.step()
+            if self._beta < 0:
+                with torch.no_grad():
+                    self._beta.copy_(torch.tensor(0.0))
+
+        return beta_loss.item()
+
+    def _violates_constraint(self, kl_div: torch.Tensor):
+        if self._kl_target_stat == "max":
+            return (kl_div > self._eps_kl).any()
+        elif self._kl_target_stat == "mean":
+            return kl_div.mean() > self._eps_kl
+        else:
+            raise ValueError("Unknown kl_target_stat", self._kl_target_stat)
 
     def _entropy_exploration_loss(self, action_distribution, valids, num_invalids: int) -> Tensor:
         entropy = action_distribution.entropy()
@@ -669,6 +752,9 @@ class Learner(Configurable):
         self, gpu_buffer: TensorDict, batch_size: int, experience_size: int, num_invalids: int
     ) -> Optional[AttrDict]:
         timing = self.timing
+        self.beta_losses = []
+        fixup_grad_steps = 0
+        self.second_penalty_loops = []
         with torch.no_grad():
             early_stopping_tolerance = 1e-6
             early_stop = False
@@ -793,6 +879,7 @@ class Learner(Configurable):
                     with self.param_server.policy_lock:
                         self.optimizer.step()
 
+                    self.beta_losses.append(self._optimize_beta(kl_div=kl_old))
                     num_sgd_steps += 1
 
                 with torch.no_grad(), timing.add_time("after_optimizer"):
@@ -817,6 +904,69 @@ class Learner(Configurable):
                     # this will force policy update on the inference worker (policy worker)
                     self.policy_versions_tensor[self.policy_id] = self.train_step
 
+            penalty_loops = 0
+            if self._fixup_loop and (self._fixup_every_repeat or epoch + 1 == self.cfg.num_epochs):
+                while True:  # until constraint satisfied
+                    constraint_satisfied = True
+                    for batch_num in range(len(minibatches)):
+                        with torch.no_grad(), timing.add_time("minibatch_init_second"):
+                            indices = minibatches[batch_num]
+
+                            # current minibatch consisting of short trajectory segments with length == recurrence
+                            mb = self._get_minibatch(gpu_buffer, indices)
+
+                            # enable syntactic sugar that allows us to access dict's keys as object attributes
+                            mb = AttrDict(mb)
+
+                        with timing.add_time("calculate_losses_second"):
+                            (
+                                action_distribution,
+                                policy_loss,
+                                exploration_loss,
+                                kl_old,
+                                kl_loss,
+                                value_loss,
+                                loss_summaries,
+                            ) = self._calculate_losses(mb, num_invalids)
+
+                        if self._violates_constraint(kl_div=kl_old):
+                            constraint_satisfied = False
+                            fixup_grad_steps += 1
+
+                            with timing.add_time("losses_postprocess_second"):
+                                # noinspection PyTypeChecker
+                                actor_loss: Tensor = kl_loss
+                                loss: Tensor = actor_loss
+
+                            # update the weights in the second loop
+                            with timing.add_time("update_second_loop"):
+                                for p in self.actor_critic.parameters():
+                                    p.grad = None
+
+                                self._beta_optim.zero_grad()
+
+                                kl_loss.backward()
+
+                                if self.cfg.max_grad_norm > 0.0:
+                                    with timing.add_time("clip"):
+                                        torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+                                                                       self.cfg.max_grad_norm)
+
+                                with self.param_server.policy_lock:
+                                    self.optimizer.step()
+
+                                self.beta_losses.append(self._optimize_beta(kl_div=kl_old))
+
+                            with torch.no_grad(), timing.add_time("after_optimizer_second"):
+                                # make sure everything (such as policy weights) is committed to shared device memory
+                                synchronize(self.cfg, self.device)
+
+                    penalty_loops += 1
+
+                    if constraint_satisfied:
+                        break
+
+                self.second_penalty_loops.append(penalty_loops)
             # end of an epoch
             if self.lr_scheduler.invoke_after_each_epoch():
                 self.curr_lr = self.lr_scheduler.update(self.curr_lr, recent_kls)
@@ -834,6 +984,17 @@ class Learner(Configurable):
                 break
 
             prev_epoch_actor_loss = new_epoch_actor_loss
+
+        if stats_and_summaries is not None:
+            stats_and_summaries.beta = self._beta.detach().item()
+            stats_and_summaries.final_second_penalty_loops = self.second_penalty_loops[-1]
+            stats_and_summaries.mean_second_penalty_loops = np.mean(self.second_penalty_loops)
+            stats_and_summaries.min_second_penalty_loops = np.min(self.second_penalty_loops)
+            stats_and_summaries.max_second_penalty_loops = np.max(self.second_penalty_loops)
+            stats_and_summaries.fixup_grad_steps = fixup_grad_steps
+            stats_and_summaries.mean_beta_losses = np.mean(self.beta_losses)
+            stats_and_summaries.max_beta_losses = np.max(self.beta_losses)
+            stats_and_summaries.min_beta_losses = np.min(self.beta_losses)
 
         return stats_and_summaries
 
@@ -866,11 +1027,15 @@ class Learner(Configurable):
         stats.act_min = var.mb.actions.min()
         stats.act_max = var.mb.actions.max()
 
-        stats.adv_min = var.mb.advantages.min()
-        stats.adv_max = var.mb.advantages.max()
-        stats.adv_std = var.adv_std
-        stats.adv_mean = var.adv_mean
+        if "adv_mean" in stats:
+            stats.adv_min = var.mb.advantages.min()
+            stats.adv_max = var.mb.advantages.max()
+            stats.adv_std = var.adv_std
+            stats.adv_mean = var.adv_mean
+
         stats.max_abs_logprob = torch.abs(var.mb.action_logits).max()
+        stats.explained_var, stats.explained_var_unbiased = explained_variance(
+            var.gpu_buffer['values'].flatten(), var.gpu_buffer['returns'].flatten())
 
         if hasattr(var.action_distribution, "summaries"):
             stats.update(var.action_distribution.summaries())
@@ -926,7 +1091,11 @@ class Learner(Configurable):
 
         # hold the lock while we alter the state of the normalizer since they can be used in other processes too
         with self.param_server.policy_lock:
-            normalized_obs = prepare_and_normalize_obs(self.actor_critic, obs)
+            if self.lock_beta_optim:
+                with self.beta_param_server.policy_lock:
+                    normalized_obs = prepare_and_normalize_obs(self.actor_critic, obs)
+            else:
+                normalized_obs = prepare_and_normalize_obs(self.actor_critic, obs)
 
         # restore original shape
         for key, x in normalized_obs.items():
