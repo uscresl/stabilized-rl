@@ -68,6 +68,9 @@ poetry run doexp exps_tianshou.py
 `src/metaworld_env_tianshou.py`: Helper function for setting up Meta-World environments.
 
 `patches/tianshou.patch`: Patch to Tianshou v0.5.0 that allows running Meta-World experiments.
+
 `patches/metaworld.patch`: Patch to Meta-World v2.0.0 that allows running Meta-World experiments.
+
 `patches/trust_region_layers.patch`: Patch to trust_region_layers that allows running Meta-World experiments.
+
 `patches/mujoco_kl_config.json`: Base config to use the KL projection proposed in  trust_region_layers.
