@@ -63,7 +63,7 @@ def get_args():
         choices=["tensorboard", "wandb"],
     )
     parser.add_argument("--wandb-project", type=str, default="stabilized-rl")
-    parser.add_argument("--wandb-group", type=str, default="xppo")
+    parser.add_argument("--wandb-group", type=str, default="ppo")
     parser.add_argument("--wandb-entity", type=str, default=None)
     parser.add_argument(
         "--watch",

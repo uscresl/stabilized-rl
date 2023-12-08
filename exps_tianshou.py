@@ -7,14 +7,15 @@ import os
 
 HOST = gethostname()
 
-# XXX Remember to redact these before review
-WANDB_ENTITY = "resl-mixppo"
-BRAIN_HOSTNAME = "brain.usc.edu"
-os.environ["WANDB_ENTITY"] = WANDB_ENTITY
-os.environ["WANDB_PROJECT"] = "stabilized-rl"
+WANDB_ENTITY = ""
+if "WANDB_ENTITY" in os.environ:
+    WANDB_ENTITY = os.environ["WANDB_ENTITY"]
+else:
+    print("Please set WANDB_ENTITY")
 os.environ["WANDB__SERVICE_WAIT"] = "300"
+SLURM_HOSTNAME = "brain.usc.edu"
 
-if HOST == BRAIN_HOSTNAME:
+if HOST == SLURM_HOSTNAME:
     MIN_CONCURRENT_JOBS = 30
     GLOBAL_CONTEXT.max_core_alloc = 600
     squeue_res = run(["squeue", "--all"], check=False, capture_output=True)
@@ -125,7 +126,7 @@ MT10_ENV_NAMES = [
 ]
 
 
-def mujoco_xppo_tianshou(
+def mujoco_fixpo_tianshou(
     seed,
     env,
     group,
@@ -146,7 +147,7 @@ def mujoco_xppo_tianshou(
     )
     return cmd(
         "python",
-        "src/mujoco_xppo_tianshou.py",
+        "src/mujoco_fixpo_tianshou.py",
         "--seed",
         seed,
         "--env",
@@ -161,7 +162,7 @@ def mujoco_xppo_tianshou(
         "--wandb-group",
         group,
         "--log-dir",
-        Out(f"xppo_tianshou/env={env}_seed={seed}_{kwargs_path}_group={group}/"),
+        Out(f"fixpo_tianshou/env={env}_seed={seed}_{kwargs_path}_group={group}/"),
         warmup_time=3,
         ram_gb=6,
         priority=priority,
@@ -257,7 +258,7 @@ def mujoco_trpo_tianshou(
     )
 
 
-def metaworld_xppo_tianshou(
+def metaworld_fixpo_tianshou(
     seed,
     env,
     group,
@@ -278,7 +279,7 @@ def metaworld_xppo_tianshou(
     )
     return cmd(
         "python",
-        "src/metaworld_xppo_tianshou.py",
+        "src/metaworld_fixpo_tianshou.py",
         "--seed",
         seed,
         "--env",
@@ -293,7 +294,7 @@ def metaworld_xppo_tianshou(
         "--wandb-group",
         group,
         "--log-dir",
-        Out(f"xppo_tianshou/env={env}_seed={seed}_{kwargs_path}_group={group}/"),
+        Out(f"fixpo_tianshou/env={env}_seed={seed}_{kwargs_path}_group={group}/"),
         warmup_time=3,
         ram_gb=6,
         priority=priority,
@@ -345,15 +346,15 @@ def metaworld_ppo_tianshou(
     )
 
 
-if HOST == BRAIN_HOSTNAME:
+if HOST == SLURM_HOSTNAME:
     # for seed in seeds:
     #     for env in mujoco_env_names_v3:
     #             total_steps = 10_000_000
-    #             group = "xppo-tianshou-mujoco-core-profile"
+    #             group = "fixpo-tianshou-mujoco-core-profile"
     #             cores = seed + 2
     #             cmd(
     #                 "python",
-    #                 "src/mujoco_xppo_tianshou.py",
+    #                 "src/mujoco_fixpo_tianshou.py",
     #                 "--seed",
     #                 seed,
     #                 "--env",
@@ -362,9 +363,9 @@ if HOST == BRAIN_HOSTNAME:
     #                 "--step-per-epoch", math.ceil(total_steps / EPOCHS),
     #                 "--wandb-entity", WANDB_ENTITY,
     #                 "--wandb-group",
-    #                 "xppo-tianshou-mujoco-core-profile",
+    #                 "fixpo-tianshou-mujoco-core-profile",
     #                 "--log-dir",
-    #                 Out(f"xppo_tianshou/env={env}_seed={seed}_cores={cores}_group={group}/"),
+    #                 Out(f"fixpo_tianshou/env={env}_seed={seed}_cores={cores}_group={group}/"),
     #                 warmup_time=3,
     #                 ram_gb=6,
     #                 priority=(60, -seed),
@@ -377,10 +378,10 @@ if HOST == BRAIN_HOSTNAME:
             base_priority = 40
             continue
         for env_i, env in enumerate(MT50_ENV_NAMES):
-            metaworld_xppo_tianshou(
+            metaworld_fixpo_tianshou(
                 seed=seed,
                 env=env,
-                group="xppo-tianshou-metaworld",
+                group="fixpo-tianshou-metaworld",
                 step_per_collect=10_000,
                 priority=(base_priority, -seed, -env_i),
             )
@@ -393,40 +394,40 @@ if HOST == BRAIN_HOSTNAME:
                 priority=(base_priority, -seed, -env_i),
             )
         for env_i, env in enumerate(MT10_ENV_NAMES):
-            group = "xppo-tianshou-metaworld-transfer"
+            group = "fixpo-tianshou-metaworld-transfer"
             cmd(
                 "python",
-                "src/metaworld_xppo_tianshou.py",
+                "src/metaworld_fixpo_tianshou.py",
                 "--seed",
                 seed,
                 "--env",
                 env,
                 "--epoch", 100,
-                "--base-task-path", In(f"xppo_tianshou/env=pick-place_seed={seed}_step-per-collect=10000_group=xppo-tianshou-metaworld/policy.pth"),
+                "--base-task-path", In(f"fixpo_tianshou/env=pick-place_seed={seed}_step-per-collect=10000_group=fixpo-tianshou-metaworld/policy.pth"),
                 "--wandb-entity", WANDB_ENTITY,
                 "--wandb-group", group,
                 "--log-dir",
-                Out(f"xppo_tianshou/env={env}_seed={seed}_group={group}/"),
+                Out(f"fixpo_tianshou/env={env}_seed={seed}_group={group}/"),
                 warmup_time=3,
                 ram_gb=6,
                 priority=(base_priority - 5, -seed, -env_i),
                 cores=2,
             )
-            back_group = "xppo-tianshou-metaworld-transfer-back"
+            back_group = "fixpo-tianshou-metaworld-transfer-back"
             cmd(
                 "python",
-                "src/metaworld_xppo_tianshou.py",
+                "src/metaworld_fixpo_tianshou.py",
                 "--seed",
                 seed,
                 "--env",
                 "pick-place",
                 "--epoch", 100,
-                "--base-task-path", In(f"xppo_tianshou/env={env}_seed={seed}_group={group}/policy.pth"),
+                "--base-task-path", In(f"fixpo_tianshou/env={env}_seed={seed}_group={group}/policy.pth"),
                 "--wandb-entity", WANDB_ENTITY,
                 "--wandb-group", group,
                 "--log-dir",
                 Out(
-                    f"xppo_tianshou/env=pick-place_base_env={env}_seed={seed}_group={back_group}/"
+                    f"fixpo_tianshou/env=pick-place_base_env={env}_seed={seed}_group={back_group}/"
                 ),
                 warmup_time=3,
                 ram_gb=6,
@@ -434,17 +435,17 @@ if HOST == BRAIN_HOSTNAME:
                 cores=2,
             )
 
-            # metaworld_xppo_tianshou(
+            # metaworld_fixpo_tianshou(
             #     seed=seed,
             #     env=env,
-            #     group="xppo-tianshou-metaworld",
+            #     group="fixpo-tianshou-metaworld",
             #     step_per_collect=50_000,
             #     priority=(61, -seed, -env_i),
             # )
-            # metaworld_xppo_tianshou(
+            # metaworld_fixpo_tianshou(
             #     seed=seed,
             #     env=env,
-            #     group="xppo-tianshou-metaworld",
+            #     group="fixpo-tianshou-metaworld",
             #     fixup_every_repeat=0,
             #     priority=(60, -seed, -env_i),
             # )
@@ -515,70 +516,70 @@ if HOST == BRAIN_HOSTNAME:
                 priority=(200, -env_i, -seed))
 
             target_coeff = 3
-            mujoco_xppo_tianshou(
+            mujoco_fixpo_tianshou(
                 seed=seed,
                 env=env,
-                group="xppo-tianshou-mujoco",
+                group="fixpo-tianshou-mujoco",
                 target_coeff=target_coeff,
                 priority=(100, -env_i, -seed))
-            mujoco_xppo_tianshou(
+            mujoco_fixpo_tianshou(
                 seed=seed,
                 env=env,
-                group="xppo-tianshou-mujocob-50k",
+                group="fixpo-tianshou-mujocob-50k",
                 target_coeff=target_coeff,
                 step_per_collect=50_000,
                 priority=(60, -env_i, -seed))
-            mujoco_xppo_tianshou(
+            mujoco_fixpo_tianshou(
                 seed=seed,
                 env=env,
-                group="xppo-tianshou-mujoco",
+                group="fixpo-tianshou-mujoco",
                 fixup_loop=0,
                 target_coeff=target_coeff,
                 priority=(60, -env_i, -seed),
             )
-            mujoco_xppo_tianshou(
+            mujoco_fixpo_tianshou(
                 seed=seed,
                 env=env,
-                group="xppo-tianshou-mujoco",
+                group="fixpo-tianshou-mujoco",
                 fixup_every_repeat=0,
                 target_coeff=target_coeff,
                 priority=(60, -env_i, -seed),
             )
-            mujoco_xppo_tianshou(
+            mujoco_fixpo_tianshou(
                 seed=seed,
                 env=env,
-                group="xppo-tianshou-mujoco",
+                group="fixpo-tianshou-mujoco",
                 kl_target_stat="mean",
                 target_coeff=target_coeff,
                 priority=(60, -env_i, -seed),
             )
-            mujoco_xppo_tianshou(
+            mujoco_fixpo_tianshou(
                 seed=seed,
                 env=env,
-                group="xppo-tianshou-mujoco",
+                group="fixpo-tianshou-mujoco",
                 kl_target_stat="max",
                 target_coeff=1,
                 priority=(60, -env_i, -seed),
             )
-            mujoco_xppo_tianshou(
+            mujoco_fixpo_tianshou(
                 seed=seed,
                 env=env,
-                group="xppo-tianshou-mujoco",
+                group="fixpo-tianshou-mujoco",
                 init_beta=10,
                 beta_lr=0,
                 priority=(60, -env_i, -seed),
             )
-            mujoco_xppo_tianshou(
+            mujoco_fixpo_tianshou(
                 seed=seed,
                 env=env,
-                group="xppo-tianshou-mujoco",
+                group="fixpo-tianshou-mujoco",
                 kl_target_stat="mean",
                 fixup_loop=0,
                 target_coeff=target_coeff,
                 priority=(30, -env_i, -seed),
             )
 
-            mujoco_xppo_tianshou(
+            mujoco_fixpo_tianshou(
                 seed=seed,
                 env=env,
                 group="fixpo-mujoco",
@@ -591,8 +592,8 @@ if HOST == BRAIN_HOSTNAME:
 
     for seed in seeds[:3]:
         for env_i, env in enumerate(MT50_ENV_NAMES):
-            group = "xppo-tianshou-beta-distribution-metaworld"
-            metaworld_xppo_tianshou(
+            group = "fixpo-tianshou-beta-distribution-metaworld"
+            metaworld_fixpo_tianshou(
                 seed=seed,
                 env=env,
                 group=group,
@@ -602,42 +603,42 @@ if HOST == BRAIN_HOSTNAME:
             )
     for seed in seeds:
         for env_i, env in enumerate(mujoco_env_names_v3):
-            mujoco_xppo_tianshou(
+            mujoco_fixpo_tianshou(
                 seed=seed,
                 env=env,
                 dist="beta",
-                group="xppo-tianshou-beta-distribution-mujoco",
+                group="fixpo-tianshou-beta-distribution-mujoco",
                 priority=(160, -env_i, -seed),
             )
 
             # for eps_kl_args in [{"eps_kl": 0.2}, {}, {"eps_kl": 1.0}]:
             #     for target_coeff in [2, 3, 5]:
-            #         mujoco_xppo_tianshou(
+            #         mujoco_fixpo_tianshou(
             #             seed=seed,
             #             env=env,
-            #             group="xppo-tianshou-mujoco",
+            #             group="fixpo-tianshou-mujoco",
             #             target_coeff=target_coeff,
             #             **eps_kl_args,
             #             priority=(50, -env_i, -seed, -target_coeff))
-            #         mujoco_xppo_tianshou(
+            #         mujoco_fixpo_tianshou(
             #             seed=seed,
             #             env=env,
-            #             group="xppo-tianshou-mujoco",
+            #             group="fixpo-tianshou-mujoco",
             #             fixup_every_repeat=0,
             #             target_coeff=target_coeff,
             #             **eps_kl_args,
             #             priority=(51, -env_i, -seed))
-            #     mujoco_xppo_tianshou(
+            #     mujoco_fixpo_tianshou(
             #         seed=seed,
             #         env=env,
-            #         group="xppo-tianshou-mujoco",
+            #         group="fixpo-tianshou-mujoco",
             #         fixup_loop=0,
             #         **eps_kl_args,
             #         priority=(50, -env_i, -seed))
-            #     mujoco_xppo_tianshou(
+            #     mujoco_fixpo_tianshou(
             #         seed=seed,
             #         env=env,
-            #         group="xppo-tianshou-mujoco",
+            #         group="fixpo-tianshou-mujoco",
             #         kl_target_stat="mean",
             #         **eps_kl_args,
             #         priority=(50, -env_i, -seed))
@@ -647,8 +648,8 @@ elif HOST == "tanuki":
 
     for seed in seeds[:1]:
         for env_i, env in enumerate(MT50_ENV_NAMES[:1]):
-            group = "xppo-tianshou-beta-distribution-metaworld"
-            metaworld_xppo_tianshou(
+            group = "fixpo-tianshou-beta-distribution-metaworld"
+            metaworld_fixpo_tianshou(
                 seed=seed,
                 env=env,
                 group=group,
@@ -657,10 +658,10 @@ elif HOST == "tanuki":
                 priority=(3, -env_i, -seed),
             )
         for env_i, env in enumerate(mujoco_env_names_v3[:1]):
-            mujoco_xppo_tianshou(
+            mujoco_fixpo_tianshou(
                 seed=seed,
                 env=env,
                 dist="beta",
-                group="xppo-tianshou-beta-distribution-mujoco",
+                group="fixpo-tianshou-beta-distribution-mujoco",
                 priority=(60, -env_i, -seed),
             )

@@ -76,7 +76,7 @@ def get_args():
     return parser.parse_args()
 
 
-def test_xppo(args=get_args()):
+def run_ppo(args=get_args()):
     env, train_envs, test_envs = make_metaworld_env(
         args.env, args.seed, args.training_num, args.test_num, obs_norm=True
     )
@@ -251,4 +251,4 @@ def test_xppo(args=get_args()):
 
 
 if __name__ == "__main__":
-    test_xppo()
+    run_ppo()
