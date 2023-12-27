@@ -145,7 +145,7 @@ for seed in seeds:
             "--gen-behavior", 1,
             "--log-dir",
             Out(f"fixpo_tianshou/env={env}_seed={seed}_group={group}/"),
-            warmup_time=3,
+            warmup_time=1,
             ram_gb=6,
             priority=(base_priority, -seed, -env_i),
             cores=2,
@@ -166,7 +166,7 @@ for seed in seeds:
             "--gen-behavior", 1,
             "--log-dir",
             Out(f"fixpo_tianshou/env={env}_seed={seed}_group={group}/"),
-            warmup_time=3,
+            warmup_time=1,
             ram_gb=6,
             priority=(base_priority - 5, -seed, -env_i),
             cores=2,
@@ -188,7 +188,7 @@ for seed in seeds:
             Out(
                 f"fixpo_tianshou/env=pick-place_base_env={env}_seed={seed}_group={back_group}/"
             ),
-            warmup_time=3,
+            warmup_time=1,
             ram_gb=6,
             priority=(base_priority + 10, -seed, -env_i),
             cores=2,
