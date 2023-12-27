@@ -119,6 +119,7 @@ class FixPOPolicy(A2CPolicy):
         self._fixup_phase_grad_steps = []
         self._gen_plots = gen_plots
         self._gen_behavior = gen_behavior
+        assert log_dir
 
     def reset_plot(self):
         global MAX_GRAD_STEP
@@ -133,8 +134,7 @@ class FixPOPolicy(A2CPolicy):
         self, batch: Batch, buffer: ReplayBuffer, indices: np.ndarray
     ) -> Batch:
         if self._gen_behavior:
-            behavior = np.concatenate([batch.observations.to_numpy(),
-                                    batch.actions.to_numpy()], axis=1)
+            behavior = np.concatenate([batch.obs, batch.act], axis=1)
             behavior_mean = np.mean(behavior, axis=0)
             behavior_covs = np.cov(behavior, rowvar=0)
             with open(f"{self._log_dir}/behavior_data_{self._epoch}.pkl", 'wb') as f:

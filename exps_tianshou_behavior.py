@@ -142,6 +142,7 @@ for seed in seeds:
             "--epoch", 100,
             "--wandb-entity", WANDB_ENTITY,
             "--wandb-group", group,
+            "--gen-behavior", 1,
             "--log-dir",
             Out(f"fixpo_tianshou/env={env}_seed={seed}_group={group}/"),
             warmup_time=3,
@@ -159,9 +160,10 @@ for seed in seeds:
             "--env",
             env,
             "--epoch", 100,
-            "--base-task-path", In(f"fixpo_tianshou/env=pick-place_seed={seed}_step-per-collect=10000_group=fixpo-tianshou-metaworld/policy.pth"),
+            "--base-task-path", In(f"fixpo_tianshou/env=pick-place_seed={seed}_step-per-collect=10000_group=fixpo-tianshou-metaworld-behavior/policy.pth"),
             "--wandb-entity", WANDB_ENTITY,
             "--wandb-group", group,
+            "--gen-behavior", 1,
             "--log-dir",
             Out(f"fixpo_tianshou/env={env}_seed={seed}_group={group}/"),
             warmup_time=3,
@@ -181,6 +183,7 @@ for seed in seeds:
             "--base-task-path", In(f"fixpo_tianshou/env={env}_seed={seed}_group={group}/policy.pth"),
             "--wandb-entity", WANDB_ENTITY,
             "--wandb-group", group,
+            "--gen-behavior", 1,
             "--log-dir",
             Out(
                 f"fixpo_tianshou/env=pick-place_base_env={env}_seed={seed}_group={back_group}/"
