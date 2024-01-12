@@ -16,7 +16,9 @@ os.environ["WANDB__SERVICE_WAIT"] = "300"
 SLURM_HOSTNAME = "brain.usc.edu"
 
 if HOST == SLURM_HOSTNAME:
-    MIN_CONCURRENT_JOBS = 30
+    # MIN_CONCURRENT_JOBS = 100
+    MIN_CONCURRENT_JOBS = 50
+    # MIN_CONCURRENT_JOBS = 30
     GLOBAL_CONTEXT.max_core_alloc = 600
     squeue_res = run(["squeue", "--all"], check=False, capture_output=True)
     if squeue_res.returncode == 0:
@@ -24,8 +26,10 @@ if HOST == SLURM_HOSTNAME:
         waiting_job_count = 0
         for line in out.split("\n"):
             if "(Priority)" in line or "(Resources)" in line:
-                if "slurm-lon" not in line:
-                    waiting_job_count += 1
+                # if "slurm-lon" not in line:
+                #     waiting_job_count += 1
+                # if " kr " in line:
+                waiting_job_count += 1
         if waiting_job_count <= 1:
             # Presumably free resources on the cluster
             GLOBAL_CONTEXT.max_concurrent_jobs += 1
@@ -34,10 +38,12 @@ if HOST == SLURM_HOSTNAME:
             if GLOBAL_CONTEXT.max_concurrent_jobs > len(GLOBAL_CONTEXT.running):
                 print(f"Running {len(GLOBAL_CONTEXT.running)} jobs")
             # Someone is waiting (maybe us), don't start any more jobs
-            GLOBAL_CONTEXT.max_concurrent_jobs = len(GLOBAL_CONTEXT.running) - 1
+            # GLOBAL_CONTEXT.max_concurrent_jobs = len(GLOBAL_CONTEXT.running) - 1
+            GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
     if GLOBAL_CONTEXT.max_concurrent_jobs < MIN_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MIN_CONCURRENT_JOBS
-    MAX_CONCURRENT_JOBS = 300
+    # MAX_CONCURRENT_JOBS = 300
+    MAX_CONCURRENT_JOBS = 170
     # MAX_CONCURRENT_JOBS = 2
     if GLOBAL_CONTEXT.max_concurrent_jobs > MAX_CONCURRENT_JOBS:
         GLOBAL_CONTEXT.max_concurrent_jobs = MAX_CONCURRENT_JOBS
@@ -151,45 +157,50 @@ for seed in seeds:
             cores=2,
         )
     for env_i, env in enumerate(MT10_ENV_NAMES):
-        group = "fixpo-tianshou-metaworld-transfer-behavior"
-        cmd(
-            "python",
-            "src/metaworld_fixpo_debug_tianshou.py",
-            "--seed",
-            seed,
-            "--env",
-            env,
-            "--epoch", 100,
-            "--base-task-path", In(f"fixpo_tianshou/env=pick-place_seed={seed}_step-per-collect=10000_group=fixpo-tianshou-metaworld-behavior/policy.pth"),
-            "--wandb-entity", WANDB_ENTITY,
-            "--wandb-group", group,
-            "--gen-behavior", 1,
-            "--log-dir",
-            Out(f"fixpo_tianshou/env={env}_seed={seed}_group={group}/"),
-            warmup_time=1,
-            ram_gb=6,
-            priority=(base_priority - 5, -seed, -env_i),
-            cores=2,
-        )
-        back_group = "fixpo-tianshou-metaworld-transfer-back-behavior"
-        cmd(
-            "python",
-            "src/metaworld_fixpo_debug_tianshou.py",
-            "--seed",
-            seed,
-            "--env",
-            "pick-place",
-            "--epoch", 100,
-            "--base-task-path", In(f"fixpo_tianshou/env={env}_seed={seed}_group={group}/policy.pth"),
-            "--wandb-entity", WANDB_ENTITY,
-            "--wandb-group", group,
-            "--gen-behavior", 1,
-            "--log-dir",
-            Out(
-                f"fixpo_tianshou/env=pick-place_base_env={env}_seed={seed}_group={back_group}/"
-            ),
-            warmup_time=1,
-            ram_gb=6,
-            priority=(base_priority + 10, -seed, -env_i),
-            cores=2,
-        )
+        if env == 'pick-place':
+            env_priority = 10
+        else:
+            env_priority = 0
+        for base_env in MT10_ENV_NAMES:
+            group = "fixpo-tianshou-metaworld-transfer-behavior"
+            cmd(
+                "python",
+                "src/metaworld_fixpo_debug_tianshou.py",
+                "--seed",
+                seed,
+                "--env",
+                env,
+                "--epoch", 200,
+                "--base-task-path", In(f"fixpo_tianshou/env={base_env}_seed={seed}_group=fixpo-tianshou-metaworld-behavior/policy.pth"),
+                "--wandb-entity", WANDB_ENTITY,
+                "--wandb-group", group,
+                "--gen-behavior", 1,
+                "--log-dir",
+                Out(f"fixpo_tianshou/env={env}_base-env={base_env}_seed={seed}_group={group}/"),
+                warmup_time=1,
+                ram_gb=6,
+                priority=(base_priority - 5, env_priority, -seed, -env_i),
+                cores=2,
+            )
+            # back_group = "fixpo-tianshou-metaworld-transfer-back-behavior"
+            # cmd(
+            #     "python",
+            #     "src/metaworld_fixpo_debug_tianshou.py",
+            #     "--seed",
+            #     seed,
+            #     "--env",
+            #     "pick-place",
+            #     "--epoch", 100,
+            #     "--base-task-path", In(f"fixpo_tianshou/env={env}_seed={seed}_group={group}/policy.pth"),
+            #     "--wandb-entity", WANDB_ENTITY,
+            #     "--wandb-group", group,
+            #     "--gen-behavior", 1,
+            #     "--log-dir",
+            #     Out(
+            #         f"fixpo_tianshou/env=pick-place_base_env={env}_seed={seed}_group={back_group}/"
+            #     ),
+            #     warmup_time=1,
+            #     ram_gb=6,
+            #     priority=(base_priority + 10, -seed, -env_i),
+            #     cores=2,
+            # )
