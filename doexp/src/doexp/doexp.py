@@ -229,19 +229,31 @@ def _sort_cmds(commands):
 
     return sorted(list(commands), key=key)
 
+def create_paths(cmd, data_dir, tmp_data_dir):
+    print('Creating paths')
+    for arg in cmd.args:
+        if isinstance(arg, In):
+            d = os.path.join(data_dir, arg.filename)
+            if not os.path.exists(d):
+                print(f'Missing In file {d}')
+        elif isinstance(arg, (Out, FileArg)):
+            # Use temporary directory here
+            d = os.path.join(tmp_data_dir, arg.filename)
+            extra = None
+            while not extra:
+                d, extra = os.path.split(d)
+            print(f"Creating directory ({d}) for Out file ({arg.filename}).")
+            os.makedirs(d, exist_ok=True)
+
 
 def _cmd_to_args(cmd, data_dir, tmp_data_dir):
     args = []
     for arg in cmd.args:
         if isinstance(arg, In):
-            assert not arg.filename.startswith("/")
             arg = os.path.join(data_dir, arg.filename)
-            os.makedirs(os.path.split(arg)[0], exist_ok=True)
         elif isinstance(arg, (Out, FileArg)):
-            assert not arg.filename.startswith("/")
             # Use temporary directory here
             arg = os.path.join(tmp_data_dir, arg.filename)
-            os.makedirs(os.path.split(arg)[0], exist_ok=True)
         args.append(str(arg))
     return args
 
@@ -251,7 +263,6 @@ def _filter_completed(running):
         p.proc.poll()
     completed = [p for p in running if p.proc.returncode is not None]
     now_running = [p for p in running if p not in completed]
-    assert len(completed) + len(now_running) == len(running)
     return now_running, completed
 
 
@@ -427,7 +438,7 @@ class Context:
         """Filters the commands to find only those that are ready to run"""
         needs_output = _filter_cmds_remaining(commands, self.data_dir)
         has_inputs = _filter_cmds_ready(needs_output, self.data_dir, self.verbose_now)
-        if needs_output and not has_inputs:
+        if needs_output and not has_inputs and not self.running:
             print("Commands exist without any way to acquire inputs:")
             for cmd in needs_output:
                 print(str(cmd))
@@ -493,6 +504,7 @@ class Context:
 
     def _run_process(self, cmd, *, stdout, stderr):
         args = _cmd_to_args(cmd, self.data_dir, self._tmp_data_dir)
+        create_paths(cmd, self.data_dir, self._tmp_data_dir)
         env = os.environ.copy()
         cuda_devices = []
         for k, v in cmd.env:
