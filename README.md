@@ -1,4 +1,8 @@
-# FixPO
+# Fixup Policy Optimization (FixPO)
+
+This repo contains the code for ["Guaranteed Trust Region Optimization via Two-Phase KL Penalization"](https://arxiv.org/abs/2312.05405).
+
+It implements an efficient trust region optimization algorithm, FixPO.
 
 ## Setup Instructions
 
@@ -74,3 +78,18 @@ poetry run doexp exps_tianshou.py
 `patches/trust_region_layers.patch`: Patch to trust_region_layers that allows running Meta-World experiments.
 
 `patches/mujoco_kl_config.json`: Base config to use the KL projection proposed in  trust_region_layers.
+
+
+## Citation:
+
+If you use this code in your research, please cite:
+```
+@misc{zentner2023guaranteed,
+  title={Guaranteed Trust Region Optimization via Two-Phase KL Penalization},
+  author={K. R. Zentner and Ujjwal Puri and Zhehui Huang and Gaurav S. Sukhatme},
+  year={2023},
+  eprint={2312.05405},
+  archivePrefix={arXiv},
+  primaryClass={cs.LG}
+}
+```
